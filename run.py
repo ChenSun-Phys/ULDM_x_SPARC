@@ -1,3 +1,9 @@
+""" A thin wrapper to call mcmc.main() that takes bash parameters
+...Module author: Chen Sun
+...Year: 2021
+...Email: chensun@mail.tau.ac.il
+
+"""
 import sys
 import getopt
 import mcmc

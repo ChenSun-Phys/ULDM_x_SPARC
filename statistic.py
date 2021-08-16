@@ -1,4 +1,8 @@
-"""Some basic statistics 
+""" This module computes some basic statistics. 
+Module author: Chen Sun
+Year: 2020, 2021
+Email: chensun@mail.tau.ac.il
+
 """
 
 from __future__ import division

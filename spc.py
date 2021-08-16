@@ -1,3 +1,14 @@
+""" This module contains all functions to load the SPARC 
+data set. It is based on the Matlab code first written by Nitsan Bar. 
+...Module author: Chen Sun
+...Year: 2021
+...Email: chensun@mail.tau.ac.il
+
+...Module author: Nitsan Bar
+...Year: 2018
+...Email: nitsan.bar@weizmann.ac.il
+
+"""
 #########################################
 # This is the code related to loading and
 # processing the SPARC data set

@@ -1,6 +1,10 @@
-#################
-# module of emcee
-#################
+""" this module calls emcee and use it to propose a smart grid 
+to quickly find the (local) mininum of -log(lkl). 
+...Module author: Chen Sun
+...Year: 2020, 2021
+...Email: chensun@mail.tau.ac.il
+
+"""
 import os
 import errno
 from collections import OrderedDict as od

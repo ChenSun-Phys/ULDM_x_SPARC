@@ -1,3 +1,10 @@
+""" This module builds up the mass profile for model A, B, and C, as shown in the paper.
+...Module author: Chen Sun
+...Year: 2020, 2021
+...Email: chensun@mail.tau.ac.il
+
+"""
+
 #######################################
 # This is the code related to
 # the model part, including

@@ -1,3 +1,9 @@
+""" This module analyzes the chains from the emcee runs and generates corner plots using corner.py.
+Module author: Chen Sun
+Year: 2020
+Email: chensun@mail.tau.ac.il
+
+"""
 try:
     import matplotlib
     matplotlib.use('Agg')

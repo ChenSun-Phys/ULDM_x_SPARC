@@ -1,4 +1,8 @@
 """This is a module that performs an even-grid scan
+...Module author: Chen Sun
+...Year: 2021
+...Email: chensun@mail.tau.ac.il
+
 """
 
 import numpy as np

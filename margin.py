@@ -1,5 +1,9 @@
-""" this module marginalizes all but two parameters
- and perform log likelihood ratio test
+""" This module marginalizes all but two parameters
+and perform log likelihood ratio test
+Module author: Chen Sun
+Year: 2021
+Email: chensun@mail.tau.ac.il
+
 """
 import h5py
 import glob

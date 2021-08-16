@@ -1,3 +1,10 @@
+""" This file automates the emcee runs with fixed m slices.
+The same can be done manually to fix m
+...Module author: Chen Sun
+...Year: 2021
+...Email: chensun@mail.tau.ac.il
+
+"""
 import sys
 import os
 import getopt
