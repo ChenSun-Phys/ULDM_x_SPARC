@@ -1,4 +1,4 @@
-# ULDM_emcee
+# ULDM_v_SPARC
 
 This is a code to constrain the ultralight dark matter using SPARC galaxies. The running modes contain soliton + NFW, soliton + Burkert, and soliton only. For the first two cases, to speed up the marginalization of nuisance parameters, we use `emcee` to propose a smart grid. 
 
