@@ -1,5 +1,5 @@
 """ This file automates the emcee runs with fixed m slices.
-The same can be done manually to fix m
+The same can be done manually to fix m in the param card
 ...Module author: Chen Sun
 ...Year: 2021
 ...Email: chensun@mail.tau.ac.il

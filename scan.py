@@ -112,6 +112,8 @@ class Scanner():
         # find M contours
         analyze(res_arr, sig_levels)
 
+        # TODO: save the upsilons so that the result can be reproduced later
+
         # pickle the result
         mcmc.dir_init('../%s' % dir_name)
         # uid = np.random.randint(1e10)
@@ -125,27 +127,27 @@ class Scanner():
         return
 
 
-def lower_array(y1_arr, y2_arr):
-    """function to find the lower bound of two curves represented by two arrays. Note: y1_arr and y2_arr need to have the same length. Otherwise, it simply returns y1_arr
+# def lower_array(y1_arr, y2_arr):
+#     """function to find the lower bound of two curves represented by two arrays. Note: y1_arr and y2_arr need to have the same length. Otherwise, it simply returns y1_arr
 
-    : param y1_arr: the first array
-    : param y2_arr: the second array
+#     : param y1_arr: the first array
+#     : param y2_arr: the second array
 
-    """
-    # special use: for the first comparison, if y1_arr is [], then y2_arr is passed to it
-    if len(y1_arr) == 0:
-        y1_arr = np.copy(y2_arr)
+#     """
+#     # special use: for the first comparison, if y1_arr is [], then y2_arr is passed to it
+#     if len(y1_arr) == 0:
+#         y1_arr = np.copy(y2_arr)
 
-    if len(y1_arr) != len(y2_arr):
-        # print(len(y2_arr))
-        # print(len(y1_arr))
-        # raise Exception(
-        #     'The two arrays need to be of the same length. Quitting')
-        return np.asarray(y1_arr)
-    y_arr = []
-    for i in range(len(y1_arr)):
-        y_arr.append(min(y1_arr[i], y2_arr[i]))
-    return np.asarray(y_arr)
+#     if len(y1_arr) != len(y2_arr):
+#         # print(len(y2_arr))
+#         # print(len(y1_arr))
+#         # raise Exception(
+#         #     'The two arrays need to be of the same length. Quitting')
+#         return np.asarray(y1_arr)
+#     y_arr = []
+#     for i in range(len(y1_arr)):
+#         y_arr.append(min(y1_arr[i], y2_arr[i]))
+#     return np.asarray(y_arr)
 
 
 def lower_array(x1_arr, y1_arr, x2_arr, y2_arr):

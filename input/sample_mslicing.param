@@ -1,0 +1,49 @@
+###########################################################
+#                     PARAMETERS FILE                     #
+###########################################################
+
+###################
+#    likelihoods  #
+###################
+
+#
+# SPARC
+#
+
+use_galaxies = ('_TBD_')
+SPARC_lkl = SPARC.txt
+SPARC_aux = SPARC_Lelli2016c.txt
+
+#
+# model
+#
+# DM_profile = NFW
+DM_profile = Burkert
+# DM_profile = Soliton
+
+###################
+#    parameters   #
+###################
+#
+# param = [init, low, up, sigma]
+#
+logm = _TBD_
+logM     =   [  9,     5,   11,   0.1]
+logc	 =   [  0,    -1,   6 ,	  0.1]
+Rs	 =   [  5,     1,   60,	  1.0]
+ups_bulg =   [0.7,    0.,   5.,   0.1]
+ups_disk =   [0.5,    0.,   5.,   0.1]
+
+#
+# galaxy specific variable (multi-galaxy fitting)
+#
+# spec_val =   ('logM', 'c', 'Rs')
+# spec_val =   ('c', 'Rs')
+# spec_val =   ('logM', 'c', 'Rs', 'ups_bulg', 'ups_disk')
+
+#
+# Miscellaneous
+#
+verbose = 1
+# debug = True
+use_multithreading = False
