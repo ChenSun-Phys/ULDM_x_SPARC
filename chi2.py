@@ -6,7 +6,7 @@ import numpy as np
 import model
 
 
-def chi2_single_gal(m, M, c, Rs, ups_disk, ups_bulg, gal, flg_Vtot=False, DM_profile="NFW"):
+def chi2_single_gal(m, M, c, Rs, ups_disk, ups_bulg, gal, flg_Vtot=False, DM_profile="NFW", flg_overshoot=False):
     """chi2 for a fixed theory point (m, M, c, Rs; ups_disk, ups_bulg). Runs over a single galaxy, gal
 up
     :param m: scalar mass [eV]
@@ -55,7 +55,11 @@ up
         dVobs = gal.dVobs[i]
 
         # compute chi2 for this bin
-        chi2 += (Vth - Vobs)**2/dVobs**2
+        if not flg_overshoot:
+            chi2 += (Vth - Vobs)**2/dVobs**2
+        else:
+            if Vth - Vobs > 0:
+                chi2 += (Vth - Vobs)**2/dVobs**2
 
         # construct Vtot for visual/sanity checks
         # construct Vtot
@@ -162,7 +166,7 @@ def chi2_gals(x, keys, keys_fixed, data, params, verbose=0):
             DM_profile = "NFW"
         try:
             Rs = param_for_gal['Rs']
-        except:
+        except Exception:
             if verbose > 5:
                 print('-----param_for_gal= %s' % param_for_gal)
                 print('-----Rs is not set, so soliton is the only component')

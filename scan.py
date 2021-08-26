@@ -10,6 +10,7 @@ import pickle
 import mcmc
 import chi2
 from tqdm import tqdm
+from scipy.interpolate import interp1d
 
 
 class Result(object):
@@ -41,12 +42,27 @@ def analyze(res_arr, sigma_lvl):
         if not result.sane:
             continue
 
-        m = result.m
+        # m = result.m
         M_arr = result.M_arr
         chi2_arr = result.chi2_arr
+        mask = result.chi2_arr > 0.01  # only interp with these guys
+        # chi2_to_interp_arr = np.concatenate(
+        #     ([result.chi2_arr[np.logical_not(mask)][-1]], result.chi2_arr[mask]))
+        chi2_to_interp_arr = np.concatenate(
+            ([1e-20], result.chi2_arr[mask]))
+        M_to_interp_arr = np.concatenate(
+            ([result.M_arr[np.logical_not(mask)][-1]], result.M_arr[mask]))
+
         M_contours = []
         for sigma in sigma_lvl:
-            M_contour = np.interp(sigma, chi2_arr, M_arr)
+            # M_contour = np.interp(sigma, chi2_arr, M_arr)
+            # M_contour = 10**np.interp(sigma,
+            #                           chi2_arr[mask], np.log10(M_arr[mask]))
+            # M_contour = 10**interp1d(chi2_arr,
+            #                          np.log10(M_arr), kind='slinear')(sigma)
+            M_contour = 10**np.interp(np.log10(sigma**2),
+                                      np.log10(chi2_to_interp_arr), np.log10(M_to_interp_arr))
+
             M_contours.append(M_contour)
 
         # update result
@@ -109,16 +125,17 @@ class Scanner():
             # save it
             res_arr.append(result)
 
+        # TODO: move analyze out of the Scanner class and make an Analyzer class
         # find M contours
         analyze(res_arr, sig_levels)
 
         # TODO: save the upsilons so that the result can be reproduced later
 
         # pickle the result
-        mcmc.dir_init('../%s' % dir_name)
+        mcmc.dir_init('../../%s' % dir_name)
         # uid = np.random.randint(1e10)
         # path = '../%s/result-%d.dat' % (dir_name, uid)
-        path = '../%s/result-%s.dat' % (dir_name, gal.name)
+        path = '../../%s/result-%s.dat' % (dir_name, gal.name)
 
         with open(path, 'w') as f:
             # pickle.dump(result, f)

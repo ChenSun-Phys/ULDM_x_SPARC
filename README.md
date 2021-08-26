@@ -13,8 +13,10 @@ python python_code/run.py -N <length_of_chain> -o <path_to_output> -L <location_
 for example:
 
 ```bash
-python python_code/run.py -N 30000 -o chains/run_18_ma_24 -L ./data/ -i input/sample4.param -w 100
+python python_code/run.py -N 30000 -o chains/run_18_ma_24 -L ./data/ -i input/sample.param -w 100
 ```
+
+where `sample.param` is the param card to be specified separately, with the range of the scan as well as galaxies of your choice. 
 
 After the run finishes, the chains can be either parsed by
 
