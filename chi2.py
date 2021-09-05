@@ -6,6 +6,54 @@ import numpy as np
 import model
 
 
+def chi2_no_soliton(c, Rs, ups_disk, ups_bulg, gal, DM_profile="NFW"):
+    """chi2 for an NFW fit (c, Rs; ups_disk, ups_bulg). Runs over a single galaxy
+
+    :param c: concentration param of the NFW profile, and delc for Burkert
+    :param Rs: critical radius of the NFW profile
+    :param ups_disk: disk surface brightness
+    :param ups_bulg: bulge surface brightness
+    :param gal: a Galaxy instance
+
+    """
+    chi2 = 0
+    for i, r in enumerate(gal.R):
+        # treat the i-th bin of the rot curve
+        #
+        # TODO: move this part out to a dedicated function
+        # V thory due to DM
+        if DM_profile == "NFW":
+            M_enclosed = model.M_NFW(r, Rs, c)
+        elif DM_profile == "Burkert":
+            M_enclosed = model.M_Burkert(
+                r, delc=c, Rs=Rs)
+        else:
+            raise Exception(
+                "Only NFW and Burkert are implemented at the moment.")
+        VDM2 = model._G_Msun_over_kpc * model._c**2 * (M_enclosed/1.) * (1./r)
+        # combine DM with the baryon mass model (from SB data)
+        Vb2 = (ups_bulg*np.abs(gal.Vbul[i])*gal.Vbul[i]
+               + ups_disk*np.abs(gal.Vdisk[i])*gal.Vdisk[i]
+               + np.abs(gal.Vgas[i])*gal.Vgas[i]
+               )
+        Vth2 = VDM2 + Vb2
+        if Vth2 > 0:
+            Vth = np.sqrt(Vth2)
+        else:
+            Vth = 0.
+        # ODOT
+
+        Vobs = gal.Vobs[i]
+        dVobs = gal.dVobs[i]
+
+        # compute chi2 for this bin
+        chi2 += (Vth - Vobs)**2/dVobs**2
+
+        # construct Vtot for visual/sanity checks
+        # construct Vtot
+    return chi2
+
+
 def chi2_single_gal(m, M, c, Rs, ups_disk, ups_bulg, gal, flg_Vtot=False, DM_profile="NFW", flg_overshoot=False):
     """chi2 for a fixed theory point (m, M, c, Rs; ups_disk, ups_bulg). Runs over a single galaxy, gal
 up

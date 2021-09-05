@@ -14,6 +14,7 @@
 #######################################
 import numpy as np
 from scipy.integrate import quad
+import chi2 as chi2
 
 _rhoc_ref = 3.967061568e-11  # [eV^4] rho_crit w/ H0=70 km/s/Mpc
 _h_ref = 0.7  # H0/(100 km/s/Mpc)
@@ -25,13 +26,16 @@ _G_Msun_over_kpc = 4.78556056645064e-17  # G*Msun/kpc
 _Mpl2_over_eV_Msun = 1.33628703752223e-10  # Mpl^2/eV/Msun
 _G_rhocref_kpc2 = 6.50782503239317e-15  # G*rho_crit*kpc^2
 _eV4_kpc3_over_Msun = 3.427947e+12  # eV^4*kpc*3/Msun
-
+_eV4_pc3_over_Msun = 3.427947e+3  # eV^4*pc*3/Msun
+_tau_U_ = 13.  # [Gyr]
+_Mpl2_km2_over_s2_kpc_over_Msun_ = 232501.397985234
 
 ######################
 # NFW:
 # input param (c, Rs)
 # output rho(r), M(r)
 ######################
+
 
 def delta_c(c):
     """the multiplier of the critical density that goes into
@@ -117,7 +121,8 @@ def lam(m, M):
 
 
 def rc(m, M):
-    """the half density radius
+    """The half density radius. 1.9 times it is the radius where density
+drops by a factor of 10.
 
     :param m: scalar mass [eV]
     :param M: solition mass [Msun]
@@ -179,8 +184,8 @@ def delta_c_Burkert(c):
     """the multiplier of the critical density that goes into
     rho_Burkert
 
-    :param c: the concentration parameter 
-    :returns: delta_c 
+    :param c: the concentration parameter
+    :returns: delta_c
     """
     res = -800.*c**3/(-3.*np.log(c**2 + 1) - 6.*np.log(c+1) + 6.*np.arctan(c))
     return res
@@ -228,6 +233,115 @@ def M_Burkert(r, delc, Rs=1., h=_h_ref):
 
 
 #######################
+# model independent
+#######################
+def reconstruct_density_num(gal, flg_give_R=False):
+    """ reconstruct the local density based on the rotaion curve
+
+    """
+    V = gal.Vobs
+    r = gal.R
+    M_unit = 232501.397985234  # [Msun] computed with km/s, kpc
+    M = V**2 * r * M_unit
+    r_mid = (r[1:] + r[:-1]) / 2.
+    dr = r[1:] - r[:-1]
+    rho = (M[1:] - M[:-1]) / 4./np.pi/r_mid**2 / dr / 1e9  # [Msun/pc**3]
+    if flg_give_R:
+        return (r_mid, rho)
+    else:
+        return rho
+
+
+def reconstruct_density(gal):
+    """ reconstruct the local density based on the rotaion curve, fit with NFW
+
+    """
+    # fit with NFW/Burkert
+    try:
+        c = gal.c
+        rs = gal.rs
+    except AttributeError:
+        rs_arr = np.linspace(1, 60)
+        c_arr = np.linspace(1, 30)
+        rs_mesh, c_mesh = np.meshgrid(rs_arr, c_arr, indexing='ij')
+        rs_flat, c_flat = rs_mesh.reshape(-1), c_mesh.reshape(-1)
+        chi2_flat = []
+        chi2_val_rec = 1e9
+        rec_idx = None
+        for i in range(len(rs_flat)):
+            rs = rs_flat[i]
+            c = c_flat[i]
+            chi2_val = chi2.chi2_no_soliton(c=c, Rs=rs, ups_disk=0.5, ups_bulg=0.5,
+                                            gal=gal, DM_profile="NFW")
+            # print(chi2_val)
+            chi2_flat.append(chi2_val)
+            if chi2_val < chi2_val_rec:
+                rec_idx = i
+                chi2_val_rec = chi2_val
+
+        # best fit
+        rs = rs_flat[rec_idx]
+        c = c_flat[rec_idx]
+
+    # output
+    gal.rs = rs
+    gal.c = c
+
+    def rho(r):
+        return rho_NFW(r, Rs=rs, c=c, h=_h_ref) * _eV4_pc3_over_Msun
+
+    return (rho, rs, c)
+
+
+def reconstruct_mass_num(gal):
+    """Numerically reconstruct M(r) based on v**2(r) without any fit
+
+    :param gal: galaxy instance
+
+    """
+    M_arr = gal.Vobs**2 * gal.R * _Mpl2_km2_over_s2_kpc_over_Msun_
+    return M_arr
+
+
+def reconstruct_mass(gal):
+    """Reconstruct M(r) based on v**2(r), fit, output mass function [Msun]
+
+    :param gal: galaxy instance
+
+    """
+    try:
+        c = gal.c
+        rs = gal.rs
+    except AttributeError:
+        rs_arr = np.linspace(1, 80)
+        c_arr = np.linspace(1, 50)
+        rs_mesh, c_mesh = np.meshgrid(rs_arr, c_arr, indexing='ij')
+        rs_flat, c_flat = rs_mesh.reshape(-1), c_mesh.reshape(-1)
+        chi2_flat = []
+        chi2_val_rec = 1e9
+        rec_idx = None
+        for i in range(len(rs_flat)):
+            rs = rs_flat[i]
+            c = c_flat[i]
+            chi2_val = chi2.chi2_no_soliton(c=c, Rs=rs, ups_disk=0.5, ups_bulg=0.5,
+                                            gal=gal, DM_profile="NFW")
+            chi2_flat.append(chi2_val)
+            if chi2_val < chi2_val_rec:
+                rec_idx = i
+                chi2_val_rec = chi2_val
+        # best fit
+        rs = rs_flat[rec_idx]
+        c = c_flat[rec_idx]
+    # output
+        gal.rs = rs
+        gal.c = c
+
+    def mass(r):
+        return M_NFW(r, Rs=rs, c=c, h=_h_ref)
+
+    return (mass, rs, c)
+
+#######################
 # soliton halo relation
 #######################
 # def M_SH(m, gal, ctilde=0.5):
@@ -245,10 +359,11 @@ def M_Burkert(r, delc, Rs=1., h=_h_ref):
 #     # E_over_M = (Vmax / _c)**2
 #     # return 4.3 * np.sqrt(np.abs(E_over_M)) * _Mpl2_over_eV_Msun/m
 
-def M_SH(m, gal):
-    """This is based on eq. 10 of the 2019 SMBH paper
 
-    :param m: soliton mass [eV]
+def M_SH(m, gal):
+    """This is based on eq. 10 of the 2019 SMBH paper. Gives soliton mass [Msun]
+
+    :param m: scalar mass [eV]
     :param gal: the galaxy instance
 
     """
@@ -268,3 +383,202 @@ def bar_ratio_at_peak(gal, M,  Ups_bulg=0.5, Ups_disk=0.5):
     Vobs2_max = (Vobs_arr[max_idx]) * (Vobs_arr[max_idx])
     Vbar2_max = Vbar2_arr[max_idx]
     return Vbar2_max / Vobs2_max
+
+
+# compute the raius predicted by the SH relation
+def rc_SH(m, gal):
+    """ the radius predicted by the SH relation [kpc]
+    """
+    Msol = M_SH(m, gal)  # the soliton mass predicted by SH relation
+    rc = 2.29e-3 * (Msol/1e11)**(-1) * (m/1e-22)**(-2)
+    return rc
+
+
+########################
+# relaxation time scales
+########################
+
+def tau(f, m, v=57., rho=0.003):
+    """ relaxation time computation [Gyr]
+    :param f: fraction
+    :param m: scalar mass [eV]
+    :param v: dispersion [km/s]
+    :param rho: DM density [Msun/pc**3]
+
+    """
+    return 0.6 * 1./f**2 * (m/(1.e-22))**3 * (v/100)**6 * (rho/0.1)**(-2)
+
+
+def relaxation_at_rc(m, gal, f, verbose=0, multiplier=1.):
+    """ relaxation time at rc*multiplier, where rc is predicted by the SH relation [Gyr]
+    """
+    rc_eff = rc_SH(m, gal)*multiplier  # this is rc*multiplier
+    if verbose > 1:
+        print('rc_SH=%s' % rc_eff)
+
+    # FIXME: change the reconstruct_density call
+    r_arr, rho_arr = reconstruct_density_num(gal, flg_give_R=True)
+    rho_at_rc = np.interp(rc_eff, r_arr, rho_arr)
+    if verbose > 1:
+        print('rho_at_rc=%s' % rho_at_rc)
+
+    v_at_rc = np.interp(rc_eff, gal.R, gal.Vobs)
+    v_inside_rc_arr = gal.Vobs[gal.R < rc_eff]
+    # make sure to use the max of v inside rc, to be conservative
+    if len(np.array(v_inside_rc_arr)) > 0:
+        v_disp = max(v_at_rc, max(v_inside_rc_arr))
+    else:
+        v_disp = v_at_rc
+    if verbose > 1:
+        print('v_at_rc=%s' % v_at_rc)
+
+    # relax_time = 0.6 * 1/f**2 * (m/1e-22)**3 * (v_at_rc/100)**6 * (rho_at_rc/0.1)**(-2)
+    relax_time = 0.6 * 1/f**2 * (m/1e-22)**3 * \
+        (v_disp/100)**6 * (rho_at_rc/0.1)**(-2)
+
+    return relax_time
+
+
+def relax_radius(f, m, gal, method='fit'):
+    """Computes the radius within which the relaxation time is smaller
+than the age of the universe. When the radius is within first data
+point, output the first radius of data point; when it's outside the
+last data point, throw an error.
+
+    """
+    if method == 'num':
+        r_arr = gal.R
+        v_arr = gal.Vobs
+        r_mid_arr, rho_arr = reconstruct_density_num(gal, flg_give_R=True)
+        # rho_arr = np.insert(rho_arr, -1, rho_arr[-1])
+        v_mid_arr = 10**np.interp(np.log10(r_mid_arr),
+                                  np.log10(r_arr), np.log10(v_arr))
+        r_arr = r_mid_arr
+        v_arr = v_mid_arr     # only use the mid points
+
+    elif method == 'fit':
+        r_arr = np.linspace(gal.R[0], gal.R[-1], 200)
+        rho_fn, _, _ = reconstruct_density(gal)
+        rho_arr = rho_fn(r_arr)
+        mass_fn, _, _ = reconstruct_mass(gal)
+        v_arr = np.sqrt(mass_fn(r_arr) / r_arr /
+                        _Mpl2_km2_over_s2_kpc_over_Msun_)
+
+    else:
+        raise Exception("method must be either 'num' or 'fit'.")
+
+    tau_arr = tau(f, m, v_arr, rho_arr)
+    mask = np.array(np.where(tau_arr - _tau_U_ < 0.)).reshape(-1)
+    if len(mask) == len(r_arr):
+        # everything is relaxed for the whole data range
+        return r_arr[-1]
+    elif len(mask) == 0:
+        # nothing is relaxed for the whole data range
+        return -1
+    else:
+        # return the point it flips from relaxed to unrelaxed
+        return r_arr[mask][-1]
+
+
+def supply_radius(f, m, gal, method='fit'):
+    """This is the radius within which there's enough mass to collect to
+make the soliton predicted by SH relation.
+
+    """
+    # get the soliton mass
+    M_SH_val = M_SH(m, gal)
+
+    if method == 'num':
+        r_arr = gal.R
+        M_arr = reconstruct_mass_num(gal)
+    elif method == 'fit':
+        mass_fn, _, _ = reconstruct_mass(gal)
+        r_arr = np.linspace(gal.R[0], gal.R[-1], 200)
+        M_arr = mass_fn(r_arr)
+    else:
+        raise Exception("method must be either 'num' or 'fit'.")
+
+    # find the radius that gives enough mass
+    mask = (np.array(np.where(M_arr > M_SH_val))).reshape(-1)
+
+    if len(mask) == 0:
+        # this is the soliton takes more than the whole galaxy
+        # don't say anything about it
+        return -1
+    elif len(mask) == len(r_arr):
+        # when there's enough mass even within the first point
+        return r_arr[0]/f
+    else:
+        r_supply = r_arr[mask][0]
+        return r_supply / f  # rescale according to isothermal of ULDM
+
+
+def f_critical(m, gal):
+    """It solves the f such that relax_radius meets supply_radius
+
+    """
+    # Note that we check r_core < r_supply < r_relax
+
+    f_arr = np.logspace(-3, 0., 100)
+    r_relax_arr = np.array([relax_radius(f, m, gal) for f in f_arr])
+    r_supply_arr = np.array([supply_radius(f, m, gal) for f in f_arr])
+    # print(r_relax_arr.shape)
+    # print(r_supply_arr.shape)
+
+    mask1 = np.where(r_relax_arr != -1, True, False)
+    mask2 = np.where(r_supply_arr != -1, True, False)
+    mask = mask1 * mask2
+
+    if sum(mask) > 0:
+        r_relax_common_arr = r_relax_arr[mask]
+        r_supply_common_arr = r_supply_arr[mask]
+        solve = np.where(r_supply_common_arr < r_relax_common_arr, True, False)
+        if sum(solve) > 0:
+            f_critical = min(f_arr[mask][solve])
+            # print(solve)
+        else:
+            f_critical = 1.5
+    else:
+        f_critical = 1.1
+    # TODO: rescale small f
+
+    # TODO: sanity check to make sure r_core is contained
+
+    return f_critical
+
+
+def f_critical_two_species(m1, m2, f2, gal):
+    """It solves the f1 such that relax_radius meets supply_radius
+
+    """
+    # Note that we check r_core < r_supply < r_relax
+
+    f1_arr = np.logspace(-3, np.log10(1-f2), 100)
+    r_relax_arr = np.array(
+        [max(relax_radius(f1, m1, gal), relax_radius(f2, m2, gal))
+         for f1 in f1_arr])
+
+    r_supply_arr = np.array([supply_radius(f1, m1, gal) for f1 in f1_arr])
+    # print(r_relax_arr.shape)
+    # print(r_supply_arr.shape)
+
+    mask1 = np.where(r_relax_arr != -1, True, False)
+    mask2 = np.where(r_supply_arr != -1, True, False)
+    mask = mask1 * mask2
+
+    if sum(mask) > 0:
+        r_relax_common_arr = r_relax_arr[mask]
+        r_supply_common_arr = r_supply_arr[mask]
+        solve = np.where(r_supply_common_arr < r_relax_common_arr, True, False)
+        if sum(solve) > 0:
+            f_critical = f1_arr[mask][solve][0]
+            # print(solve)
+        else:
+            f_critical = 1.5
+    else:
+        f_critical = 1.1
+    # TODO: rescale small f
+
+    # TODO: sanity check to make sure r_core is contained
+
+    return f_critical
