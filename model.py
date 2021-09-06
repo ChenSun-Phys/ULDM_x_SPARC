@@ -14,7 +14,7 @@
 #######################################
 import numpy as np
 from scipy.integrate import quad
-import chi2 as chi2
+import chi2
 
 _rhoc_ref = 3.967061568e-11  # [eV^4] rho_crit w/ H0=70 km/s/Mpc
 _h_ref = 0.7  # H0/(100 km/s/Mpc)
@@ -232,11 +232,11 @@ def M_Burkert(r, delc, Rs=1., h=_h_ref):
     return res * scaling
 
 
-#######################
-# model independent
-#######################
-def reconstruct_density_num(gal, flg_give_R=False):
-    """ reconstruct the local density based on the rotaion curve
+###########################
+# model fit or independent
+###########################
+def reconstruct_density_total(gal, flg_give_R=False):
+    """ reconstruct the total density based on the rotaion curve, purely numerically
 
     """
     V = gal.Vobs
@@ -252,8 +252,8 @@ def reconstruct_density_num(gal, flg_give_R=False):
         return rho
 
 
-def reconstruct_density(gal):
-    """ reconstruct the local density based on the rotaion curve, fit with NFW
+def reconstruct_density_DM(gal, DM_profile='NFW'):
+    """ reconstruct the DM density based on the rotaion curve, fit with NFW
 
     """
     # fit with NFW/Burkert
@@ -261,31 +261,9 @@ def reconstruct_density(gal):
         c = gal.c
         rs = gal.rs
     except AttributeError:
-        rs_arr = np.linspace(1, 60)
-        c_arr = np.linspace(1, 30)
-        rs_mesh, c_mesh = np.meshgrid(rs_arr, c_arr, indexing='ij')
-        rs_flat, c_flat = rs_mesh.reshape(-1), c_mesh.reshape(-1)
-        chi2_flat = []
-        chi2_val_rec = 1e9
-        rec_idx = None
-        for i in range(len(rs_flat)):
-            rs = rs_flat[i]
-            c = c_flat[i]
-            chi2_val = chi2.chi2_no_soliton(c=c, Rs=rs, ups_disk=0.5, ups_bulg=0.5,
-                                            gal=gal, DM_profile="NFW")
-            # print(chi2_val)
-            chi2_flat.append(chi2_val)
-            if chi2_val < chi2_val_rec:
-                rec_idx = i
-                chi2_val_rec = chi2_val
-
-        # best fit
-        rs = rs_flat[rec_idx]
-        c = c_flat[rec_idx]
-
-    # output
-    gal.rs = rs
-    gal.c = c
+        chi2.fit_rot_curve(gal, DM_profile=DM_profile)
+        c = gal.c
+        rs = gal.rs
 
     def rho(r):
         return rho_NFW(r, Rs=rs, c=c, h=_h_ref) * _eV4_pc3_over_Msun
@@ -293,8 +271,8 @@ def reconstruct_density(gal):
     return (rho, rs, c)
 
 
-def reconstruct_mass_num(gal):
-    """Numerically reconstruct M(r) based on v**2(r) without any fit
+def reconstruct_mass_total(gal):
+    """Numerically reconstruct total M(r) based on v**2(r) purely numerically
 
     :param gal: galaxy instance
 
@@ -303,8 +281,8 @@ def reconstruct_mass_num(gal):
     return M_arr
 
 
-def reconstruct_mass(gal):
-    """Reconstruct M(r) based on v**2(r), fit, output mass function [Msun]
+def reconstruct_mass_DM(gal, DM_profile='NFW'):
+    """Reconstruct DM component M(r) based on v**2(r), fit, output mass function [Msun]
 
     :param gal: galaxy instance
 
@@ -313,33 +291,46 @@ def reconstruct_mass(gal):
         c = gal.c
         rs = gal.rs
     except AttributeError:
-        rs_arr = np.linspace(1, 80)
-        c_arr = np.linspace(1, 50)
-        rs_mesh, c_mesh = np.meshgrid(rs_arr, c_arr, indexing='ij')
-        rs_flat, c_flat = rs_mesh.reshape(-1), c_mesh.reshape(-1)
-        chi2_flat = []
-        chi2_val_rec = 1e9
-        rec_idx = None
-        for i in range(len(rs_flat)):
-            rs = rs_flat[i]
-            c = c_flat[i]
-            chi2_val = chi2.chi2_no_soliton(c=c, Rs=rs, ups_disk=0.5, ups_bulg=0.5,
-                                            gal=gal, DM_profile="NFW")
-            chi2_flat.append(chi2_val)
-            if chi2_val < chi2_val_rec:
-                rec_idx = i
-                chi2_val_rec = chi2_val
-        # best fit
-        rs = rs_flat[rec_idx]
-        c = c_flat[rec_idx]
-    # output
-        gal.rs = rs
-        gal.c = c
-
-    def mass(r):
-        return M_NFW(r, Rs=rs, c=c, h=_h_ref)
-
+        chi2.fit_rot_curve(gal, DM_profile=DM_profile)
+        c = gal.c
+        rs = gal.rs
+    if DM_profile == "NFW":
+        def mass(r):
+            return M_NFW(r, Rs=rs, c=c, h=_h_ref)
+    elif DM_profile == "Burkert":
+        def mass(r):
+            return M_Burkert(r, Rs=rs, delc=c, h=_h_ref)
     return (mass, rs, c)
+
+
+def v2_rot(gal, c, Rs, ups_bulg, ups_disk, DM_profile, m=None, M=None):
+    Vth2_arr = []
+    for i, r in enumerate(gal.R):
+        # treat the i-th bin of the rot curve
+        #
+        # TODO: move this part out to a dedicated function
+        # V thory due to DM
+        M_enclosed = 0.
+        if (m is not None) and (M is not None):
+            M_enclosed += M_sol(r, m, M)
+        if DM_profile == "NFW":
+            M_enclosed += M_NFW(r, Rs, c)
+        elif DM_profile == "Burkert":
+            M_enclosed += M_Burkert(r, delc=c, Rs=Rs)
+        else:
+            raise Exception(
+                "Only NFW and Burkert are implemented at the moment.")
+        VDM2 = _G_Msun_over_kpc * _c**2 * (M_enclosed/1.) * (1./r)
+        # combine DM with the baryon mass model (from SB data)
+        Vb2 = (ups_bulg*np.abs(gal.Vbul[i])*gal.Vbul[i]
+               + ups_disk*np.abs(gal.Vdisk[i])*gal.Vdisk[i]
+               + np.abs(gal.Vgas[i])*gal.Vgas[i]
+               )
+        Vth2 = VDM2 + Vb2
+        Vth2_arr.append(Vth2)
+    Vth2_arr = np.array(Vth2_arr)
+    return Vth2_arr
+
 
 #######################
 # soliton halo relation
@@ -416,8 +407,8 @@ def relaxation_at_rc(m, gal, f, verbose=0, multiplier=1.):
     if verbose > 1:
         print('rc_SH=%s' % rc_eff)
 
-    # FIXME: change the reconstruct_density call
-    r_arr, rho_arr = reconstruct_density_num(gal, flg_give_R=True)
+    # note this should be total density
+    r_arr, rho_arr = reconstruct_density_total(gal, flg_give_R=True)
     rho_at_rc = np.interp(rc_eff, r_arr, rho_arr)
     if verbose > 1:
         print('rho_at_rc=%s' % rho_at_rc)
@@ -439,7 +430,7 @@ def relaxation_at_rc(m, gal, f, verbose=0, multiplier=1.):
     return relax_time
 
 
-def relax_radius(f, m, gal, method='fit'):
+def relax_radius(f, m, gal, method='num'):
     """Computes the radius within which the relaxation time is smaller
 than the age of the universe. When the radius is within first data
 point, output the first radius of data point; when it's outside the
@@ -449,7 +440,7 @@ last data point, throw an error.
     if method == 'num':
         r_arr = gal.R
         v_arr = gal.Vobs
-        r_mid_arr, rho_arr = reconstruct_density_num(gal, flg_give_R=True)
+        r_mid_arr, rho_arr = reconstruct_density_total(gal, flg_give_R=True)
         # rho_arr = np.insert(rho_arr, -1, rho_arr[-1])
         v_mid_arr = 10**np.interp(np.log10(r_mid_arr),
                                   np.log10(r_arr), np.log10(v_arr))
@@ -457,10 +448,12 @@ last data point, throw an error.
         v_arr = v_mid_arr     # only use the mid points
 
     elif method == 'fit':
-        r_arr = np.linspace(gal.R[0], gal.R[-1], 200)
-        rho_fn, _, _ = reconstruct_density(gal)
+        # FIXME: need to add the baryon component
+        print("Using DM component only. This is technically not correct.")
+        r_arr = np.logspace(np.log10(gal.R[0]), np.log10(gal.R[-1]), 200)
+        rho_fn, _, _ = reconstruct_density_DM(gal)
         rho_arr = rho_fn(r_arr)
-        mass_fn, _, _ = reconstruct_mass(gal)
+        mass_fn, _, _ = reconstruct_mass_DM(gal)
         v_arr = np.sqrt(mass_fn(r_arr) / r_arr /
                         _Mpl2_km2_over_s2_kpc_over_Msun_)
 
@@ -489,11 +482,15 @@ make the soliton predicted by SH relation.
     M_SH_val = M_SH(m, gal)
 
     if method == 'num':
+        print("You chose to use total mass to supply the growth of BEC core. This is\
+              technically incorrect. Need to subtract the baryonic component,\
+              then multiply by the fraction of the correct species. ")
+        # FIXME: find a way to subtract the baryonic components
         r_arr = gal.R
-        M_arr = reconstruct_mass_num(gal)
+        M_arr = reconstruct_mass_total(gal)
     elif method == 'fit':
-        mass_fn, _, _ = reconstruct_mass(gal)
-        r_arr = np.linspace(gal.R[0], gal.R[-1], 200)
+        mass_fn, _, _ = reconstruct_mass_DM(gal)
+        r_arr = np.logspace(np.log10(gal.R[0]), np.log10(gal.R[-1]), 200)
         M_arr = mass_fn(r_arr)
     else:
         raise Exception("method must be either 'num' or 'fit'.")
@@ -507,23 +504,21 @@ make the soliton predicted by SH relation.
         return -1
     elif len(mask) == len(r_arr):
         # when there's enough mass even within the first point
-        return r_arr[0]/f
+        return r_arr[0] / np.sqrt(f)
     else:
         r_supply = r_arr[mask][0]
-        return r_supply / f  # rescale according to isothermal of ULDM
+        return r_supply / np.sqrt(f)  # rescale according to isothermal of ULDM
 
 
 def f_critical(m, gal):
     """It solves the f such that relax_radius meets supply_radius
 
     """
-    # Note that we check r_core < r_supply < r_relax
-
     f_arr = np.logspace(-3, 0., 100)
-    r_relax_arr = np.array([relax_radius(f, m, gal) for f in f_arr])
-    r_supply_arr = np.array([supply_radius(f, m, gal) for f in f_arr])
-    # print(r_relax_arr.shape)
-    # print(r_supply_arr.shape)
+    r_relax_arr = np.array(
+        [relax_radius(f, m, gal, method='num') for f in f_arr])
+    r_supply_arr = np.array(
+        [supply_radius(f, m, gal, method='fit') for f in f_arr])
 
     mask1 = np.where(r_relax_arr != -1, True, False)
     mask2 = np.where(r_supply_arr != -1, True, False)
@@ -535,12 +530,10 @@ def f_critical(m, gal):
         solve = np.where(r_supply_common_arr < r_relax_common_arr, True, False)
         if sum(solve) > 0:
             f_critical = min(f_arr[mask][solve])
-            # print(solve)
         else:
             f_critical = 1.5
     else:
         f_critical = 1.1
-    # TODO: rescale small f
 
     # TODO: sanity check to make sure r_core is contained
 
@@ -551,16 +544,14 @@ def f_critical_two_species(m1, m2, f2, gal):
     """It solves the f1 such that relax_radius meets supply_radius
 
     """
-    # Note that we check r_core < r_supply < r_relax
 
     f1_arr = np.logspace(-3, np.log10(1-f2), 100)
     r_relax_arr = np.array(
-        [max(relax_radius(f1, m1, gal), relax_radius(f2, m2, gal))
+        [max(relax_radius(f1, m1, gal, method='num'), relax_radius(f2, m2, gal, method='num'))
          for f1 in f1_arr])
 
-    r_supply_arr = np.array([supply_radius(f1, m1, gal) for f1 in f1_arr])
-    # print(r_relax_arr.shape)
-    # print(r_supply_arr.shape)
+    r_supply_arr = np.array(
+        [supply_radius(f1, m1, gal, method='fit') for f1 in f1_arr])
 
     mask1 = np.where(r_relax_arr != -1, True, False)
     mask2 = np.where(r_supply_arr != -1, True, False)
@@ -572,13 +563,10 @@ def f_critical_two_species(m1, m2, f2, gal):
         solve = np.where(r_supply_common_arr < r_relax_common_arr, True, False)
         if sum(solve) > 0:
             f_critical = f1_arr[mask][solve][0]
-            # print(solve)
         else:
             f_critical = 1.5
     else:
         f_critical = 1.1
-    # TODO: rescale small f
-
     # TODO: sanity check to make sure r_core is contained
 
     return f_critical

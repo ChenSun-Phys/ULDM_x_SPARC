@@ -17,31 +17,34 @@ def chi2_no_soliton(c, Rs, ups_disk, ups_bulg, gal, DM_profile="NFW"):
 
     """
     chi2 = 0
+    Vth2_arr = model.v2_rot(gal, c, Rs, ups_bulg, ups_disk, DM_profile)
     for i, r in enumerate(gal.R):
         # treat the i-th bin of the rot curve
         #
-        # TODO: move this part out to a dedicated function
-        # V thory due to DM
-        if DM_profile == "NFW":
-            M_enclosed = model.M_NFW(r, Rs, c)
-        elif DM_profile == "Burkert":
-            M_enclosed = model.M_Burkert(
-                r, delc=c, Rs=Rs)
-        else:
-            raise Exception(
-                "Only NFW and Burkert are implemented at the moment.")
-        VDM2 = model._G_Msun_over_kpc * model._c**2 * (M_enclosed/1.) * (1./r)
-        # combine DM with the baryon mass model (from SB data)
-        Vb2 = (ups_bulg*np.abs(gal.Vbul[i])*gal.Vbul[i]
-               + ups_disk*np.abs(gal.Vdisk[i])*gal.Vdisk[i]
-               + np.abs(gal.Vgas[i])*gal.Vgas[i]
-               )
-        Vth2 = VDM2 + Vb2
+        # # TODO: move this part out to a dedicated function
+        # # V thory due to DM
+        # if DM_profile == "NFW":
+        #     M_enclosed = model.M_NFW(r, Rs, c)
+        # elif DM_profile == "Burkert":
+        #     M_enclosed = model.M_Burkert(
+        #         r, delc=c, Rs=Rs)
+        # else:
+        #     raise Exception(
+        #         "Only NFW and Burkert are implemented at the moment.")
+        # VDM2 = model._G_Msun_over_kpc * model._c**2 * (M_enclosed/1.) * (1./r)
+        # # combine DM with the baryon mass model (from SB data)
+        # Vb2 = (ups_bulg*np.abs(gal.Vbul[i])*gal.Vbul[i]
+        #        + ups_disk*np.abs(gal.Vdisk[i])*gal.Vdisk[i]
+        #        + np.abs(gal.Vgas[i])*gal.Vgas[i]
+        #        )
+        # Vth2 = VDM2 + Vb2
+        # ODOT
+
+        Vth2 = Vth2_arr[i]
         if Vth2 > 0:
             Vth = np.sqrt(Vth2)
         else:
             Vth = 0.
-        # ODOT
 
         Vobs = gal.Vobs[i]
         dVobs = gal.dVobs[i]
@@ -52,6 +55,37 @@ def chi2_no_soliton(c, Rs, ups_disk, ups_bulg, gal, DM_profile="NFW"):
         # construct Vtot for visual/sanity checks
         # construct Vtot
     return chi2
+
+
+def fit_rot_curve(gal, DM_profile='NFW', gridsize=50):
+    """A quick fit with NFW/Burkert only
+
+    """
+    rs_arr = np.linspace(1, 80, gridsize)
+    c_arr = np.logspace(0, 1.5, gridsize)
+    rs_mesh, c_mesh = np.meshgrid(rs_arr, c_arr, indexing='ij')
+    rs_flat, c_flat = rs_mesh.reshape(-1), c_mesh.reshape(-1)
+    chi2_flat = []
+    chi2_val_rec = 1e9
+    rec_idx = None
+    for i in range(len(rs_flat)):
+        rs = rs_flat[i]
+        c = c_flat[i]
+        chi2_val = chi2_no_soliton(c=c, Rs=rs, ups_disk=0.5, ups_bulg=0.5,
+                                   gal=gal, DM_profile=DM_profile)
+        chi2_flat.append(chi2_val)
+        if chi2_val < chi2_val_rec:
+            rec_idx = i
+            chi2_val_rec = chi2_val
+            # print(chi2_val)
+    chi2_flat = np.array(chi2_flat)
+    # best fit
+    rs = rs_flat[rec_idx]
+    c = c_flat[rec_idx]
+    # output
+    gal.rs = rs
+    gal.c = c
+    return (rs_mesh, c_mesh, chi2_flat)
 
 
 def chi2_single_gal(m, M, c, Rs, ups_disk, ups_bulg, gal, flg_Vtot=False, DM_profile="NFW", flg_overshoot=False):
@@ -73,31 +107,35 @@ up
     chi2 = 0
     if flg_Vtot:
         Vtot = np.array([])
+    Vth2_arr = model.v2_rot(gal, c, Rs, ups_bulg,
+                            ups_disk, DM_profile, m=m, M=M)
     for i, r in enumerate(gal.R):
         # treat the i-th bin of the rot curve
         #
-        # TODO: move this part out to a dedicated function
-        # V thory due to DM
-        if DM_profile == "NFW":
-            M_enclosed = model.M_NFW(r, Rs, c) + model.M_sol(r, m, M)
-        elif DM_profile == "Burkert":
-            M_enclosed = model.M_Burkert(
-                r, delc=c, Rs=Rs) + model.M_sol(r, m, M)
-        else:
-            raise Exception(
-                "Only NFW and Burkert are implemented at the moment.")
-        VDM2 = model._G_Msun_over_kpc * model._c**2 * (M_enclosed/1.) * (1./r)
-        # combine DM with the baryon mass model (from SB data)
-        Vb2 = (ups_bulg*np.abs(gal.Vbul[i])*gal.Vbul[i]
-               + ups_disk*np.abs(gal.Vdisk[i])*gal.Vdisk[i]
-               + np.abs(gal.Vgas[i])*gal.Vgas[i]
-               )
-        Vth2 = VDM2 + Vb2
+        # # TODO: move this part out to a dedicated function
+        # # V thory due to DM
+        # if DM_profile == "NFW":
+        #     M_enclosed = model.M_NFW(r, Rs, c) + model.M_sol(r, m, M)
+        # elif DM_profile == "Burkert":
+        #     M_enclosed = model.M_Burkert(
+        #         r, delc=c, Rs=Rs) + model.M_sol(r, m, M)
+        # else:
+        #     raise Exception(
+        #         "Only NFW and Burkert are implemented at the moment.")
+        # VDM2 = model._G_Msun_over_kpc * model._c**2 * (M_enclosed/1.) * (1./r)
+        # # combine DM with the baryon mass model (from SB data)
+        # Vb2 = (ups_bulg*np.abs(gal.Vbul[i])*gal.Vbul[i]
+        #        + ups_disk*np.abs(gal.Vdisk[i])*gal.Vdisk[i]
+        #        + np.abs(gal.Vgas[i])*gal.Vgas[i]
+        #        )
+        # Vth2 = VDM2 + Vb2
+        # ODOT
+
+        Vth2 = Vth2_arr[i]
         if Vth2 > 0:
             Vth = np.sqrt(Vth2)
         else:
             Vth = 0.
-        # ODOT
 
         Vobs = gal.Vobs[i]
         dVobs = gal.dVobs[i]

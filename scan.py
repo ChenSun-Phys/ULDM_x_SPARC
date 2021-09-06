@@ -220,17 +220,3 @@ def lower_array(x1_arr, y1_arr, x2_arr, y2_arr):
 
         y_arr.append(y)
     return x_arr, np.asarray(y_arr)
-
-    # if len(y1_arr) == 0:
-    #     y1_arr = np.copy(y2_arr)
-
-    # if len(y1_arr) != len(y2_arr):
-    #     # print(len(y2_arr))
-    #     # print(len(y1_arr))
-    #     # raise Exception(
-    #     #     'The two arrays need to be of the same length. Quitting')
-    #     return np.asarray(y1_arr)
-    # y_arr = []
-    # for i in range(len(y1_arr)):
-    #     y_arr.append(min(y1_arr[i], y2_arr[i]))
-    # return np.asarray(y_arr)
