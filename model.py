@@ -583,7 +583,7 @@ def tau_BH_smallzeta(m, gal, MBH):
     """
     # get halo mass
     mass_fn, _, _ = reconstruct_mass_DM(gal)
-    Mh = mass_fn(gal.R[-1] * 10.)
+    Mh = mass_fn(gal.R[-1])
 
     # compute time scale
     res = 2.4e8 * (m / 1.e-22)**(-2) * \
@@ -597,7 +597,7 @@ def tau_BH_largezeta(m, gal, MBH):
     """
     # get halo mass
     mass_fn, _, _ = reconstruct_mass_DM(gal)
-    Mh = mass_fn(gal.R[-1] * 10.)
+    Mh = mass_fn(gal.R[-1])
 
     # compute time scale
     res = 1.5e9 * (m / 1.e-22)**(-3) * (MBH / 4.e6)**(-2) * (Mh / 1e12)**(-1)
@@ -627,7 +627,7 @@ def tau_BH(m, gal, MBH):
     res_arr = np.array(res_arr)
 
     if is_scalar:
-        res = res_arr.squeeze
+        res = res_arr.squeeze()
     else:
         res = res_arr
     return res
