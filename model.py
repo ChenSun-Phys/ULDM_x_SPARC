@@ -510,7 +510,7 @@ make the soliton predicted by SH relation.
         return r_supply / np.sqrt(f)  # rescale according to isothermal of ULDM
 
 
-def f_critical(m, gal):
+def f_critical(m, gal, factor=1.):
     """It solves the f such that relax_radius meets supply_radius
 
     """
@@ -527,7 +527,8 @@ def f_critical(m, gal):
     if sum(mask) > 0:
         r_relax_common_arr = r_relax_arr[mask]
         r_supply_common_arr = r_supply_arr[mask]
-        solve = np.where(r_supply_common_arr < r_relax_common_arr, True, False)
+        solve = np.where(r_supply_common_arr * factor <
+                         r_relax_common_arr, True, False)
         if sum(solve) > 0:
             f_critical = min(f_arr[mask][solve])
         else:
@@ -570,3 +571,63 @@ def f_critical_two_species(m1, m2, f2, gal):
     # TODO: sanity check to make sure r_core is contained
 
     return f_critical
+
+
+###########################
+# BH absorption time scales
+###########################
+
+def tau_BH_smallzeta(m, gal, MBH):
+    """The BH absorption time scale [Gyr] for small zeta. Eq. B15 in Bar et al. 2018
+
+    """
+    # get halo mass
+    mass_fn, _, _ = reconstruct_mass_DM(gal)
+    Mh = mass_fn(gal.R[-1] * 10.)
+
+    # compute time scale
+    res = 2.4e8 * (m / 1.e-22)**(-2) * \
+        (MBH / 4.e6)**(-1) * (Mh / 1e12)**(-4./3)
+    return res
+
+
+def tau_BH_largezeta(m, gal, MBH):
+    """The BH absorption time scale [Gyr] for large zeta. Eq. B16 in Bar et al. 2018
+
+    """
+    # get halo mass
+    mass_fn, _, _ = reconstruct_mass_DM(gal)
+    Mh = mass_fn(gal.R[-1] * 10.)
+
+    # compute time scale
+    res = 1.5e9 * (m / 1.e-22)**(-3) * (MBH / 4.e6)**(-2) * (Mh / 1e12)**(-1)
+    return res
+
+
+def tau_BH(m, gal, MBH):
+    """The BH absorption time scale [Gyr]
+
+    :param m: scalar mass [eV]
+    :param gal: galaxy instance
+    :param MBH: BH mass [Msun]
+
+    """
+    is_scalar = False
+    m_arr = np.array(m)
+    if m_arr.ndim == 0:
+        is_scalar = True
+        m_arr = m_arr[None]
+    res_arr = []
+    for mi in m_arr:
+        # get halo mass
+        tau_small_val = tau_BH_smallzeta(mi, gal, MBH)
+        tau_large_val = tau_BH_largezeta(mi, gal, MBH)
+        tau_min = min(tau_small_val, tau_large_val)
+        res_arr.append(tau_min)
+    res_arr = np.array(res_arr)
+
+    if is_scalar:
+        res = res_arr.squeeze
+    else:
+        res = res_arr
+    return res
