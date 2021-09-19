@@ -7,13 +7,13 @@ This is a code to constrain the ultralight dark matter (ULDM) using the SPARC da
 Simple use case of a run with smart-grid can be invoked by
 
 ```bash
-python python_code/run.py -N <length_of_chain> -o <path_to_output> -L <location_of_dataset> -i <path_to_input> -w <number_of_walkers>
+python run.py -N <length_of_chain> -o <path_to_output> -L <location_of_dataset> -i <path_to_input> -w <number_of_walkers>
 ```
 
 for example:
 
 ```bash
-python python_code/run.py -N 30000 -o chains/run_18_ma_24 -L ./data/ -i input/sample.param -w 100
+python run.py -N 30000 -o chains/run_18_ma_24 -L ./data/ -i input/sample.param -w 100
 ```
 
 where `sample.param` is the param card to be specified separately, with the range of the scan as well as galaxies of your choice. 
@@ -21,13 +21,13 @@ where `sample.param` is the param card to be specified separately, with the rang
 After the run finishes, the chains can be either parsed by
 
 ```bash
-python python_code/analyze.py -i <path_to_chain>
+python analyze.py -i <path_to_chain>
 ```
 or by using the `demo_parse_smart_grid.ipynb`.
 
 The m slice run can also be automated with run_mslicing.py:
 ```bash
-python python_code/run_mslicing.py -N <length_of_chain> -o <path_to_output> -L <location_of_dataset> -i <path_to_input> -w <number_of_walkers> -m 'logm_min logm_max number_of_slicing' -G 'galA galB ...'
+python run_mslicing.py -N <length_of_chain> -o <path_to_output> -L <location_of_dataset> -i <path_to_input> -w <number_of_walkers> -m 'logm_min logm_max number_of_slicing' -G 'galA galB ...'
 ```
 
 For a scan of Model C with evenly spaced grid, see `demo_even_grid_scan.ipynb`. 
