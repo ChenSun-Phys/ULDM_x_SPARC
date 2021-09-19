@@ -235,21 +235,41 @@ def M_Burkert(r, delc, Rs=1., h=_h_ref):
 ###########################
 # model fit or independent
 ###########################
-def reconstruct_density_total(gal, flg_give_R=False):
+def reconstruct_density_total(gal, flg_give_R=False, interpol_method="linear", interpol_precision=300):
     """ reconstruct the total density based on the rotaion curve, purely numerically
 
+    :param gal: galaxy instance
+    :param flg_give_R: whether to output R
+    :param method: use nearest point or do a linear fit in the neighboring points
+
     """
-    V = gal.Vobs
-    r = gal.R
-    M_unit = 232501.397985234  # [Msun] computed with km/s, kpc
-    M = V**2 * r * M_unit
-    r_mid = (r[1:] + r[:-1]) / 2.
-    dr = r[1:] - r[:-1]
-    rho = (M[1:] - M[:-1]) / 4./np.pi/r_mid**2 / dr / 1e9  # [Msun/pc**3]
-    if flg_give_R:
-        return (r_mid, rho)
+    if interpol_method == 'nearest':
+        V = gal.Vobs
+        r = gal.R
+        M_unit = 232501.397985234  # [Msun] computed with km/s, kpc
+        M = V**2 * r * M_unit
+        r_mid = (r[1:] + r[:-1]) / 2.
+        dr = r[1:] - r[:-1]
+        rho = (M[1:] - M[:-1]) / 4./np.pi/r_mid**2 / dr / 1e9  # [Msun/pc**3]
+        if flg_give_R:
+            return (r_mid, rho)
+        else:
+            return rho
+    elif interpol_method == 'linear':
+        r = np.logspace(np.log10(gal.R[0]), np.log10(
+            gal.R[-1]), interpol_precision)
+        V = 10**np.interp(np.log10(r), np.log10(gal.R), np.log10(gal.Vobs))
+        M_unit = 232501.397985234  # [Msun] computed with km/s, kpc
+        M = V**2 * r * M_unit
+        r_mid = (r[1:] + r[:-1]) / 2.
+        dr = r[1:] - r[:-1]
+        rho = (M[1:] - M[:-1]) / 4./np.pi/r_mid**2 / dr / 1e9  # [Msun/pc**3]
+        if flg_give_R:
+            return (r_mid, rho)
+        else:
+            return rho
     else:
-        return rho
+        raise Exception("Only 'linear' and 'nearest' are implemented.")
 
 
 def reconstruct_density_DM(gal, DM_profile='NFW'):
@@ -303,8 +323,44 @@ def reconstruct_mass_DM(gal, DM_profile='NFW'):
     return (mass, rs, c)
 
 
-def v2_rot(gal, c, Rs, ups_bulg, ups_disk, DM_profile, m=None, M=None):
+def v2_rot(gal, c, Rs, ups_bulg, ups_disk, DM_profile, m=None, M=None, flg_debug=False):
+    """Constructs the rotation curve. It can produce sol alone, NFW alone, Burkert alone, sol+NFW, and sol+Burkert.
+
+    :param gal: galaxy instance
+    :param c: concentration
+    :param Rs: transition rs of NFW profile [kpc]
+    :param ups_bulg: Upsilon of bulge
+    :param ups_disk: Upsilon of disk
+    :param DM_profile: dark matter profile ('NFW'|'Burkert')
+    :param m: scalar mass [eV]. Soliton component will be neglected if set to None.
+    :param M: soliton mass [Msun]. Soliton component will be neglected if set to None.
+    :param flg_debug: whether to output the mask for truncating NFW at small radius
+
+    """
+
     Vth2_arr = []
+    mask = None
+    truncated_mass = 0.
+    mask = [1.] * len(gal.R)
+
+    # TODO: NFW case, determine if soliton is bigger than NFW anywhere
+    # if yes, cut out the NFW at small r where NFW beats soliton again
+    if (DM_profile == "NFW") and (m is not None) and (M is not None):
+        rho_NFW_arr = rho_NFW(gal.R, Rs=Rs, c=c)
+        rho_sol_arr = rho_sol(gal.R, m=m, M=M)
+        flg_truncating = False
+        truncated_mass = 0.
+        for i in range(1, len(gal.R)+1):
+            if rho_NFW_arr[-i] < rho_sol_arr[-i]:
+                flg_truncating = True
+
+            if flg_truncating is True:
+                # rho_NFW_arr[-i] = 0.
+                mask[-i] = 0.
+                # record the truncated mass
+                truncated_mass = max(
+                    truncated_mass, M_NFW(gal.R[-i], Rs, c))
+
     for i, r in enumerate(gal.R):
         # treat the i-th bin of the rot curve
         #
@@ -314,7 +370,7 @@ def v2_rot(gal, c, Rs, ups_bulg, ups_disk, DM_profile, m=None, M=None):
         if (m is not None) and (M is not None):
             M_enclosed += M_sol(r, m, M)
         if DM_profile == "NFW":
-            M_enclosed += M_NFW(r, Rs, c)
+            M_enclosed += (M_NFW(r, Rs, c) - truncated_mass) * mask[i]
         elif DM_profile == "Burkert":
             M_enclosed += M_Burkert(r, delc=c, Rs=Rs)
         else:
@@ -329,7 +385,10 @@ def v2_rot(gal, c, Rs, ups_bulg, ups_disk, DM_profile, m=None, M=None):
         Vth2 = VDM2 + Vb2
         Vth2_arr.append(Vth2)
     Vth2_arr = np.array(Vth2_arr)
-    return Vth2_arr
+    if not flg_debug:
+        return Vth2_arr
+    else:
+        return (Vth2_arr, mask)
 
 
 #######################
@@ -430,17 +489,21 @@ def relaxation_at_rc(m, gal, f, verbose=0, multiplier=1.):
     return relax_time
 
 
-def relax_radius(f, m, gal, method='num'):
+def relax_radius(f, m, gal, method='num', interpol_method='linear'):
     """Computes the radius within which the relaxation time is smaller
-than the age of the universe. When the radius is within first data
-point, output the first radius of data point; when it's outside the
-last data point, throw an error.
+
+    :param f: fraction of total ULDM
+    :param m: mass of ULDM [eV]
+    :param gal: galaxy instance
+    :param method: method of reconstructing the density profile
+    :param interpol_method: method of interpolating the density profile, when method is 'num'
 
     """
     if method == 'num':
         r_arr = gal.R
         v_arr = gal.Vobs
-        r_mid_arr, rho_arr = reconstruct_density_total(gal, flg_give_R=True)
+        r_mid_arr, rho_arr = reconstruct_density_total(
+            gal, flg_give_R=True, interpol_method=interpol_method)
         # rho_arr = np.insert(rho_arr, -1, rho_arr[-1])
         v_mid_arr = 10**np.interp(np.log10(r_mid_arr),
                                   np.log10(r_arr), np.log10(v_arr))
