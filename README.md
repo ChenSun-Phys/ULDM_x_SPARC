@@ -31,7 +31,8 @@ python run_mslicing.py -N <length_of_chain> -o <path_to_output> -L <location_of_
 ```
 
 for example:
-```python run_mslicing.py -N 30000 -o ./chains/run_000_NFW -L ./data -i input/sample_mslicing_2.param -w 100 -m '-25 -19 30' -G 'NGC0100 NGC2403'
+```bash
+python run_mslicing.py -N 30000 -o ./chains/run_000_NFW -L ./data -i input/sample_mslicing_2.param -w 100 -m '-25 -19 30' -G 'NGC0100 NGC2403'
 ```
 
 will automatically run soliton+NFW model over NGC0100 and NGC2403 with 30 fixed m ranging from 1e-25 eV to 1e-19 eV. The h5 chains will be saved under ./chains/ folder. 
