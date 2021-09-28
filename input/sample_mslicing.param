@@ -28,8 +28,8 @@ DM_profile = Burkert
 # param = [init, low, up, sigma]
 #
 logm = _TBD_
-logM     =   [  9,     5,   11,   0.1]
-logc	 =   [  0,    -1,   6 ,	  0.1]
+logM     =   [  9,   4.5,   17,   0.1]
+logc	 =   [  0,    -1,   7 ,	  0.1]
 Rs	 =   [  5,     1,   60,	  1.0]
 ups_bulg =   [0.7,    0.,   5.,   0.1]
 ups_disk =   [0.5,    0.,   5.,   0.1]

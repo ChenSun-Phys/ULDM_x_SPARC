@@ -67,14 +67,14 @@ def rho_NFW(r, Rs=1., c=0.5, h=_h_ref):
     :param Rs: critical radius of NFW [kpc], default: 1
     :param h: Hubble const H/(100 km/s/Mpc) [1], default: 0.7
     :param c: the concentration parameter [1], default: 0.5
-    :returns: density of the halo [eV^4]
+    :returns: density of the halo [Msun/kpc**3]
 
     """
 
     rhoc = rho_crit(h)
     delc = delta_c(c)
     rhos = rhoc * delc
-    res = rhos / (r/Rs * (1 + r/Rs)**2)
+    res = rhos / (r/Rs * (1 + r/Rs)**2) * _eV4_kpc3_over_Msun
     return res
 
 
@@ -151,12 +151,12 @@ def rho_sol(r, m, M):
 
 
 def M_sol(r, m, M):
-    """Soliton mass profile. The form is achieved by integrating rho_sol(r) * 4pi*r^2 dr
+    """Soliton mass profile. The form is achieved by analytically integrating rho_sol(r) * 4pi*r^2 dr
 
     :param r: radius [kpc]
     :param m: scalar mass [eV]
     :param M: soliton mass [Msun]
-    :returns: density at r [Msun/kpc^3]
+    :returns: enclosed mass within r [Msun]
 
     """
     rcval = rc(m, M)
@@ -173,7 +173,9 @@ def M_sol(r, m, M):
     # TODO: check with a numerical integral of rho for typos
     # DONE
 
-    M_norm = 1./11.5865 * (M/1.)  # rho0 * rc^3
+    # note that the rc**3 in M_shape cancels with the 1/rc**3 in the M_norm
+    # M_norm is actually rho0 * rc^3 instead of rho0, to make the unit consistent
+    M_norm = M / 11.5865
     return M_norm * M_shape
 
 
@@ -198,13 +200,15 @@ def rho_Burkert(r, delc, Rs=1., h=_h_ref):
     :param delc: delta_c that goes into the numerator
     :param Rs: critical radius of Burkert [kpc], default: 1
     :param h: Hubble const H/(100 km/s/Mpc) [1], default: 0.7
-    :returns: density of the halo [eV^4]
+    :returns: density of the halo [Msun/kpc**3]
 
     """
     rhoc = rho_crit(h)
     # delc = delta_c_Burkert(c)
     rho0 = rhoc * delc
-    res = rho0 / (1. + r/Rs) / (1 + (r/Rs)**2)
+    # DEPRECATED
+    # res = rho0 / (1. + r/Rs) / (1 + (r/Rs)**2)
+    res = rho0 / (1. + r/Rs) / (1 + (r/Rs)**2) * _eV4_kpc3_over_Msun
     return res
 
 
@@ -235,24 +239,38 @@ def M_Burkert(r, delc, Rs=1., h=_h_ref):
 ###########################
 # model fit or independent
 ###########################
-def reconstruct_density_total(gal, flg_give_R=False, interpol_method="linear", interpol_precision=300):
-    """ reconstruct the total density based on the rotaion curve, purely numerically
+def reconstruct_density_total(gal, flg_give_R=False, interpol_method="linear", interpol_precision=300, flg_errorbar=False, Vth=None):
+    """ reconstruct the total density based on the rotaion curve, purely numerically [Msun/pc**3]
 
     :param gal: galaxy instance
     :param flg_give_R: whether to output R
-    :param method: use nearest point or do a linear fit in the neighboring points
+    :param interpol_method: how to interpolate the neighboring points
+    :param interpol_precision: number of data points for the interpolation
+    :param flg_errorbar: provide an error bar for rho. Note that this is a rough estimate by translating sigma(Vobs) to sigma(rho). 
+    :param Vth: supply velocity directly from model. Vth will be used for the reconstruction instead of gal.Vobs
 
     """
     if interpol_method == 'nearest':
-        V = gal.Vobs
+        if Vth is None:
+            V = gal.Vobs
+        else:
+            V = Vth
         r = gal.R
         M_unit = 232501.397985234  # [Msun] computed with km/s, kpc
         M = V**2 * r * M_unit
-        r_mid = (r[1:] + r[:-1]) / 2.
+        Rmid = (r[1:] + r[:-1]) / 2.
         dr = r[1:] - r[:-1]
-        rho = (M[1:] - M[:-1]) / 4./np.pi/r_mid**2 / dr / 1e9  # [Msun/pc**3]
+        rho = (M[1:] - M[:-1]) / 4./np.pi/Rmid**2 / dr / 1e9  # [Msun/pc**3]
         if flg_give_R:
-            return (r_mid, rho)
+            if flg_errorbar:
+                # estimate of error bar
+                Vmid = (V[1:] + V[: -1]) / 2.
+                dVmid = np.sqrt((gal.dVobs[1:]**2 + gal.dVobs[: -1])**2)
+                factor = 3.7e-5  # [Mpl**2*2*(km/s)**2*kpc/(4pi)]
+                sigma_rho = factor * Vmid / Rmid / dr * dVmid
+                return (Rmid, rho, sigma_rho)
+            else:
+                return (Rmid, rho)
         else:
             return rho
     elif interpol_method == 'linear':
@@ -261,11 +279,11 @@ def reconstruct_density_total(gal, flg_give_R=False, interpol_method="linear", i
         V = 10**np.interp(np.log10(r), np.log10(gal.R), np.log10(gal.Vobs))
         M_unit = 232501.397985234  # [Msun] computed with km/s, kpc
         M = V**2 * r * M_unit
-        r_mid = (r[1:] + r[:-1]) / 2.
+        Rmid = (r[1:] + r[:-1]) / 2.
         dr = r[1:] - r[:-1]
-        rho = (M[1:] - M[:-1]) / 4./np.pi/r_mid**2 / dr / 1e9  # [Msun/pc**3]
+        rho = (M[1:] - M[:-1]) / 4./np.pi/Rmid**2 / dr / 1e9  # [Msun/pc**3]
         if flg_give_R:
-            return (r_mid, rho)
+            return (Rmid, rho)
         else:
             return rho
     else:
@@ -273,7 +291,7 @@ def reconstruct_density_total(gal, flg_give_R=False, interpol_method="linear", i
 
 
 def reconstruct_density_DM(gal, DM_profile='NFW'):
-    """ reconstruct the DM density based on the rotaion curve, fit with NFW
+    """ reconstruct the DM density based on the rotaion curve, fit with NFW [Msun/pc3]
 
     """
     # fit with NFW/Burkert
@@ -286,7 +304,9 @@ def reconstruct_density_DM(gal, DM_profile='NFW'):
         rs = gal.rs
 
     def rho(r):
-        return rho_NFW(r, Rs=rs, c=c, h=_h_ref) * _eV4_pc3_over_Msun
+        # return rho_NFW(r, Rs=rs, c=c, h=_h_ref) * _eV4_pc3_over_Msun
+        # [Msun/kpc3] to [Msun/pc3]
+        return rho_NFW(r, Rs=rs, c=c, h=_h_ref) / 1e9
 
     return (rho, rs, c)
 
@@ -323,7 +343,7 @@ def reconstruct_mass_DM(gal, DM_profile='NFW'):
     return (mass, rs, c)
 
 
-def v2_rot(gal, c, Rs, ups_bulg, ups_disk, DM_profile, m=None, M=None, flg_debug=False):
+def v2_rot(gal, c, Rs, ups_bulg, ups_disk, DM_profile, m=None, M=None, flg_debug=False, flg_baryon=True):
     """Constructs the rotation curve. It can produce sol alone, NFW alone, Burkert alone, sol+NFW, and sol+Burkert.
 
     :param gal: galaxy instance
@@ -335,23 +355,25 @@ def v2_rot(gal, c, Rs, ups_bulg, ups_disk, DM_profile, m=None, M=None, flg_debug
     :param m: scalar mass [eV]. Soliton component will be neglected if set to None.
     :param M: soliton mass [Msun]. Soliton component will be neglected if set to None.
     :param flg_debug: whether to output the mask for truncating NFW at small radius
+    :param flg_baryon: whether to include baryon component in constructing the rotation curve (default: True)
 
     """
-
     Vth2_arr = []
     mask = None
     truncated_mass = 0.
     mask = [1.] * len(gal.R)
+    # TODO: check if gal.R is already sorted
 
-    # TODO: NFW case, determine if soliton is bigger than NFW anywhere
-    # if yes, cut out the NFW at small r where NFW beats soliton again
+    # NFW case, determine if soliton is bigger than NFW anywhere
+    # if yes, cut out the NFW at small r to prevent NFW beating soliton again
     if (DM_profile == "NFW") and (m is not None) and (M is not None):
-        rho_NFW_arr = rho_NFW(gal.R, Rs=Rs, c=c)
-        rho_sol_arr = rho_sol(gal.R, m=m, M=M)
+        rho_NFW_arr = rho_NFW(gal.R, Rs=Rs, c=c)  # [Msun/kpc**3] unit fixed
+        rho_sol_arr = rho_sol(gal.R, m=m, M=M)  # [Msun/kpc**3]
         flg_truncating = False
         truncated_mass = 0.
         for i in range(1, len(gal.R)+1):
             if rho_NFW_arr[-i] < rho_sol_arr[-i]:
+                # One-way switch. Once it's on it's never off
                 flg_truncating = True
 
             if flg_truncating is True:
@@ -360,7 +382,7 @@ def v2_rot(gal, c, Rs, ups_bulg, ups_disk, DM_profile, m=None, M=None, flg_debug
                 # record the truncated mass
                 truncated_mass = max(
                     truncated_mass, M_NFW(gal.R[-i], Rs, c))
-
+    # print("mask: %s" % mask)
     for i, r in enumerate(gal.R):
         # treat the i-th bin of the rot curve
         #
@@ -382,7 +404,10 @@ def v2_rot(gal, c, Rs, ups_bulg, ups_disk, DM_profile, m=None, M=None, flg_debug
                + ups_disk*np.abs(gal.Vdisk[i])*gal.Vdisk[i]
                + np.abs(gal.Vgas[i])*gal.Vgas[i]
                )
-        Vth2 = VDM2 + Vb2
+        if flg_baryon:
+            Vth2 = VDM2 + Vb2
+        else:
+            Vth2 = VDM2
         Vth2_arr.append(Vth2)
     Vth2_arr = np.array(Vth2_arr)
     if not flg_debug:
@@ -456,7 +481,8 @@ def tau(f, m, v=57., rho=0.003):
     :param rho: DM density [Msun/pc**3]
 
     """
-    return 0.6 * 1./f**2 * (m/(1.e-22))**3 * (v/100)**6 * (rho/0.1)**(-2)
+    # fixed: 0.6 -> 2.
+    return 2. * 1./f**2 * (m/(1.e-22))**3 * (v/100)**6 * (rho/0.1)**(-2)
 
 
 def relaxation_at_rc(m, gal, f, verbose=0, multiplier=1.):
@@ -482,8 +508,9 @@ def relaxation_at_rc(m, gal, f, verbose=0, multiplier=1.):
     if verbose > 1:
         print('v_at_rc=%s' % v_at_rc)
 
+    # fixed: 0.6 -> 2
     # relax_time = 0.6 * 1/f**2 * (m/1e-22)**3 * (v_at_rc/100)**6 * (rho_at_rc/0.1)**(-2)
-    relax_time = 0.6 * 1/f**2 * (m/1e-22)**3 * \
+    relax_time = 2. * 1/f**2 * (m/1e-22)**3 * \
         (v_disp/100)**6 * (rho_at_rc/0.1)**(-2)
 
     return relax_time
@@ -511,7 +538,7 @@ def relax_radius(f, m, gal, method='num', interpol_method='linear'):
         v_arr = v_mid_arr     # only use the mid points
 
     elif method == 'fit':
-        # FIXME: need to add the baryon component
+        # TODO: need to add the baryon component
         print("Using DM component only. This is technically not correct.")
         r_arr = np.logspace(np.log10(gal.R[0]), np.log10(gal.R[-1]), 200)
         rho_fn, _, _ = reconstruct_density_DM(gal)
@@ -548,7 +575,7 @@ make the soliton predicted by SH relation.
         print("You chose to use total mass to supply the growth of BEC core. This is\
               technically incorrect. Need to subtract the baryonic component,\
               then multiply by the fraction of the correct species. ")
-        # FIXME: find a way to subtract the baryonic components
+        # TODO: find a way to subtract the baryonic components
         r_arr = gal.R
         M_arr = reconstruct_mass_total(gal)
     elif method == 'fit':

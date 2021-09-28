@@ -169,11 +169,13 @@ def SH_bound(m, gal):
     return Msol
 
 
-def m_slicing_single_gal(gal, n_sig, dim_of_param, verbose=1.,):
-    lst_M95_upper = []
-    lst_M95_lower = []
+def m_slicing_single_gal(gal, n_sig, dim_of_param, verbose=1., num_of_bins=30, flg_debug=False, flg_debug_breakpt=0):
+    lst_M_upper = []
+    lst_M_lower = []
     lst_bestfit = np.empty((0, dim_of_param))
     for i in range(len(gal.m)):
+        if flg_debug and i != flg_debug_breakpt:  # debug
+            continue
         m = gal.m[i]
         path = gal.path[i]
         path_new = os.path.join(gal.path[i], 'chain_1.h5')
@@ -181,12 +183,13 @@ def m_slicing_single_gal(gal, n_sig, dim_of_param, verbose=1.,):
         # get 1D posterior
         (lst_M, lst_chi2, point_count, lst_bf) = post_1d(path_new,
                                                          0,
-                                                         num_of_bins=30,
+                                                         num_of_bins=num_of_bins,
                                                          verbose=verbose,
                                                          flg_save_bf=True)
 
         # finding contours in the poterior
-        lst_chi2 = lst_chi2 - min(lst_chi2)
+        chi2min = min(lst_chi2)
+        lst_chi2 = lst_chi2 - chi2min
 
         # account for upper and lower
         index_of_chi2min = np.where(lst_chi2 == 0.)
@@ -195,28 +198,45 @@ def m_slicing_single_gal(gal, n_sig, dim_of_param, verbose=1.,):
         if len(index_of_chi2min) == 1:
             index_of_chi2min = np.squeeze(index_of_chi2min.reshape(-1))
         else:
-            # just get the last zero
+            # just get the last zero, could be problematic
             index_of_chi2min = index_of_chi2min[-1]
+            if verbose > 1:
+                print("-margin.py: There are %d minima in the global chi-square!!!!" %
+                      len(index_of_chi2min))
 
-        M95_upper = np.interp(
-            n_sig**2, lst_chi2[index_of_chi2min:], lst_M[index_of_chi2min:], left=np.nan, right=np.nan)
-        M95_lower = np.interp(
-            n_sig**2., lst_chi2[index_of_chi2min::-1], lst_M[index_of_chi2min::-1], left=np.nan, right=np.nan)
+        M_upper = np.interp(
+            np.log10(n_sig**2+0.01), np.log10(lst_chi2[index_of_chi2min:]+0.01), lst_M[index_of_chi2min:], left=np.nan, right=np.nan)
+        # M_upper = np.interp(
+        #     (n_sig**2), (lst_chi2[index_of_chi2min:]), lst_M[index_of_chi2min:], left=np.nan, right=np.nan)
+        M_lower = np.interp(
+            np.log10(n_sig**2+0.01), np.log10(lst_chi2[index_of_chi2min::-1]+0.01), lst_M[index_of_chi2min::-1], left=np.nan, right=np.nan)
         if verbose > 1:
-            print("-margin.py: 95%% CL M upper=10^%.2f Msun" % (M95_upper))
-            print("-margin.py: 95%% CL M lower=10^%.2f Msun" % (M95_lower))
+            print("-margin.py: %.1f sigma M upper=10^%.2f Msun, m=%.1e eV" %
+                  (n_sig, M_upper, m))
+            print("-margin.py: %.1f sigma M lower=10^%.2f Msun, m=%.1e eV" %
+                  (n_sig, M_lower, m))
+            print("-margin.py: chi2min=%.1f" %
+                  (chi2min))
 
-        # find the block that contains the global chi2_min
+        # OUTDATED: find the block that contains the global chi2_min
+        # index_bf = np.interp(n_sig**2,
+        #                      lst_chi2,
+        #                      range(len(lst_M)),
+        #                      left=np.nan,
+        #                      right=np.nan)
+
+        # this is the bestfit of the block that gives M_upper
         index_bf = np.interp(n_sig**2,
-                             lst_chi2,
-                             range(len(lst_M)),
+                             lst_chi2[index_of_chi2min:],
+                             range(len(lst_M))[index_of_chi2min:],
                              left=np.nan,
                              right=np.nan)
-
+        if verbose > 2:
+            print("--margin.py: index_bf=%s" % index_bf)
         # output
         # lst_m_slice = np.append(lst_m_slice, 10**logm)
-        lst_M95_upper = np.append(lst_M95_upper, 10**M95_upper)
-        lst_M95_lower = np.append(lst_M95_lower, 10**M95_lower)
+        lst_M_upper = np.append(lst_M_upper, 10**M_upper)
+        lst_M_lower = np.append(lst_M_lower, 10**M_lower)
 
         if not np.isnan(index_bf):
             lst_bestfit = np.concatenate(
@@ -226,13 +246,18 @@ def m_slicing_single_gal(gal, n_sig, dim_of_param, verbose=1.,):
                 (lst_bestfit, [[np.nan]*dim_of_param]))
         if verbose > 1:
             print('\n\n')
-    gal.Mupper = lst_M95_upper
-    gal.Mlower = lst_M95_lower
+
+        # debug
+        if flg_debug and i == flg_debug_breakpt:
+            return (lst_M, lst_chi2, point_count, lst_bf)
+
+    gal.Mupper = lst_M_upper
+    gal.Mlower = lst_M_lower
     gal.bestfit = lst_bestfit
-    # return (lst_m_slice, lst_M95_upper, lst_M95_lower, lst_bestfit)
+    # return (lst_m_slice, lst_M_upper, lst_M_lower, lst_bestfit)
 
 
-def m_slicing(runid, n_sig, dim_of_param, verbose=1., multiprocessing=False, path='/a/home/cc/students/physics/chensun/Code/BEC_dynamics/chains/'):
+def m_slicing(runid, n_sig, dim_of_param, verbose=1., multiprocessing=False, path='/a/home/cc/students/physics/chensun/Code/BEC_dynamics/chains/', num_of_bins=30):
     """Does the m slicing chi2 analysis
 
     :param runid: the id of the run
@@ -245,13 +270,14 @@ def m_slicing(runid, n_sig, dim_of_param, verbose=1., multiprocessing=False, pat
 
     if multiprocessing:
         # FIXME: doesn't work due to pickling error
+        # DONE. Put into a class instance when used
         import multiprocessing as mp
 
         pool = mp.Pool()
 
         def wrapper(gal):
             m_slicing_single_gal(
-                gal, n_sig=n_sig, dim_of_param=dim_of_param, verbose=verbose)
+                gal, n_sig=n_sig, dim_of_param=dim_of_param, verbose=verbose, num_of_bins=num_of_bins)
         pool.map(wrapper, dct_gal.values())
         pool.close()
         pool.join()
