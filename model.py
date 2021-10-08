@@ -694,14 +694,17 @@ def tau_BH_largezeta(m, gal, MBH):
     return res
 
 
-def tau_BH(m, gal, MBH):
+def tau_BH(m, gal, MBH, debug_factor=1.):
     """The BH absorption time scale [Gyr]
 
     :param m: scalar mass [eV]
     :param gal: galaxy instance
-    :param MBH: BH mass [Msun]
+    :param MBH: BH mass [Msun]. If it is None type, compute the BH mass using the first data point of the rotation curve (conservative.)
+    :param debug_factor: factor for debugging
 
     """
+    if MBH is None:
+        MBH = reconstruct_mass_total(gal)[0] * debug_factor
     is_scalar = False
     m_arr = np.array(m)
     if m_arr.ndim == 0:
