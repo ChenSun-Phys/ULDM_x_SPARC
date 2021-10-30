@@ -348,6 +348,74 @@ def reconstruct_mass_DM(gal, DM_profile='NFW'):
     return (mass, rs, c)
 
 
+def comparing_components(gal, m, M, c, Rs, DM_profile):
+    """Compare soliton profile with the secondary DM profile. Output two mask series with length of gal.R. One is for soliton, the other is for the secondary mass component.
+
+    :param gal: galaxy instance
+    :param m: scalar mass [eV]
+    :param M: soliton mass [Msun]
+    :param c: concentration of NFW or delc of Burkert
+    :param Rs: Rs of NFW or core size of Burkert
+    :param DM_profile: the DM profile, "NFW" or "Burkert"
+
+    """
+    flg_sol_absent = False
+    flg2_absent = False
+    if (m is None) or (M is None):
+        mask_soliton = [False] * len(gal.R)
+        flg_sol_absent = True
+    if (c is None) or (Rs is None):
+        mask2 = [False] * len(gal.R)
+        flg2_absent = True
+
+    if flg_sol_absent and flg2_absent:
+        # simple test
+        raise Exception(
+            'Something wrong in the input. You have neither\
+ a soliton component nor a secondary component.')
+    elif flg_sol_absent and (not flg2_absent):
+        # NFW/Burkert only
+        mask2 = np.logical_not(mask_soliton)
+        truncated_mass = 0.
+    elif flg2_absent and (not flg_sol_absent):
+        # soliton only
+        mask_soliton = np.logical_not(mask2)
+        truncated_mass = 0.
+    else:
+
+        rho_sol_arr = rho_sol(gal.R, m=m, M=M)  # [Msun/kpc**3]
+        mask2 = np.array([True] * len(gal.R))
+
+        if (DM_profile == "NFW"):
+            rho2_arr = rho_NFW(gal.R, Rs=Rs, c=c)  # [Msun/kpc**3] unit fixed
+        elif (DM_profile == "Burkert"):
+            # [Msun/kpc**3] unit fixed
+            rho2_arr = rho_Burkert(gal.R, Rs=Rs, delc=c)
+
+        flg_truncating = False
+        truncated_mass = 0.
+        for i in range(1, len(gal.R)+1):
+            if rho2_arr[-i] < rho_sol_arr[-i]:
+                # One-way switch. Once it's on it's never off
+                flg_truncating = True
+
+            # real truncating
+            if flg_truncating is True:
+                # rho_NFW_arr[-i] = 0.
+                mask2[-i] = False
+                # record the truncated mass
+                if (DM_profile == "NFW"):
+                    truncated_mass = max(
+                        truncated_mass, M_NFW(gal.R[-i], Rs, c))
+                elif (DM_profile == "Burkert"):
+                    truncated_mass = max(
+                        truncated_mass, M_Burkert(gal.R[-i], Rs=Rs, delc=c))
+        # Now let us get the mask array for solitons
+        mask_soliton = np.logical_not(mask2)
+
+    return (mask_soliton, mask2, truncated_mass)
+
+
 def v2_rot(gal, c, Rs, ups_bulg, ups_disk, DM_profile, m=None, M=None, flg_debug=False, flg_baryon=True):
     """Constructs the rotation curve [km**2/s**2]. It can produce sol alone, NFW alone, Burkert alone, sol+NFW, and sol+Burkert.
 
@@ -364,29 +432,35 @@ def v2_rot(gal, c, Rs, ups_bulg, ups_disk, DM_profile, m=None, M=None, flg_debug
 
     """
     Vth2_arr = []
-    mask = None
-    truncated_mass = 0.
-    mask = [1.] * len(gal.R)
+    # mask = None
+    # truncated_mass = 0.
+    # # mask for including NFW. Zero means truncate it
+    # mask = [0.] * len(gal.R)
     # TODO: check if gal.R is already sorted
 
-    # NFW case, determine if soliton is bigger than NFW anywhere
-    # if yes, cut out the NFW at small r to prevent NFW beating soliton again
-    if (DM_profile == "NFW") and (m is not None) and (M is not None):
-        rho_NFW_arr = rho_NFW(gal.R, Rs=Rs, c=c)  # [Msun/kpc**3] unit fixed
-        rho_sol_arr = rho_sol(gal.R, m=m, M=M)  # [Msun/kpc**3]
-        flg_truncating = False
-        truncated_mass = 0.
-        for i in range(1, len(gal.R)+1):
-            if rho_NFW_arr[-i] < rho_sol_arr[-i]:
-                # One-way switch. Once it's on it's never off
-                flg_truncating = True
+    # # NFW case, determine if soliton is bigger than NFW anywhere
+    # # if yes, cut out the NFW at small r to prevent NFW beating soliton again
+    # if (DM_profile == "NFW") and (m is not None) and (M is not None):
+    #     mask = [1.] * len(gal.R)
+    #     rho_NFW_arr = rho_NFW(gal.R, Rs=Rs, c=c)  # [Msun/kpc**3] unit fixed
+    #     rho_sol_arr = rho_sol(gal.R, m=m, M=M)  # [Msun/kpc**3]
+    #     flg_truncating = False
+    #     truncated_mass = 0.
+    #     for i in range(1, len(gal.R)+1):
+    #         if rho_NFW_arr[-i] < rho_sol_arr[-i]:
+    #             # One-way switch. Once it's on it's never off
+    #             flg_truncating = True
 
-            if flg_truncating is True:
-                # rho_NFW_arr[-i] = 0.
-                mask[-i] = 0.
-                # record the truncated mass
-                truncated_mass = max(
-                    truncated_mass, M_NFW(gal.R[-i], Rs, c))
+    #         if flg_truncating is True:
+    #             # rho_NFW_arr[-i] = 0.
+    #             mask[-i] = 0.
+    #             # record the truncated mass
+    #             truncated_mass = max(
+    #                 truncated_mass, M_NFW(gal.R[-i], Rs, c))
+
+    # TODO: make sure that the two this doesn't break when soliton is absent
+    mask_soliton, mask2, truncated_mass = comparing_components(
+        gal, m, M, c, Rs, DM_profile)
     # print("mask: %s" % mask)
     for i, r in enumerate(gal.R):
         # treat the i-th bin of the rot curve
@@ -395,11 +469,12 @@ def v2_rot(gal, c, Rs, ups_bulg, ups_disk, DM_profile, m=None, M=None, flg_debug
         # V thory due to DM
         M_enclosed = 0.
         if (m is not None) and (M is not None):
-            M_enclosed += M_sol(r, m, M)
+            M_enclosed += M_sol(r, m, M) * mask_soliton[i]
         if DM_profile == "NFW":
-            M_enclosed += (M_NFW(r, Rs, c) - truncated_mass) * mask[i]
+            M_enclosed += (M_NFW(r, Rs, c) - truncated_mass) * mask2[i]
         elif DM_profile == "Burkert":
-            M_enclosed += M_Burkert(r, delc=c, Rs=Rs)
+            M_enclosed += (M_Burkert(r, delc=c, Rs=Rs) -
+                           truncated_mass) * mask2[i]
         else:
             raise Exception(
                 "Only NFW and Burkert are implemented at the moment.")
@@ -418,7 +493,7 @@ def v2_rot(gal, c, Rs, ups_bulg, ups_disk, DM_profile, m=None, M=None, flg_debug
     if not flg_debug:
         return Vth2_arr
     else:
-        return (Vth2_arr, mask)
+        return (Vth2_arr, mask_soliton, mask2, truncated_mass)
 
 
 def sigma_over_vcirc(x):
