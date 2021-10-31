@@ -16,6 +16,7 @@ from __future__ import division
 
 import numpy as np
 from scipy.integrate import quad
+from scipy.optimize import bisect
 import chi2
 import tools as tl
 
@@ -165,23 +166,36 @@ def M_sol(r, m, M):
 
     """
     rcval = rc(m, M)
-    M_shape = 7.37618/(rcval**2 + 0.091*r**2)**7 * (
-        0.384872*rcval**11*r**3 + 0.0665595*rcval**9*r**5 + 0.00665084*rcval**7*r**7
-        + 0.000390285*rcval**5*r**9 + 0.0000125498*rcval**3*r**11
-        + (0.637*rcval**12*r**2 + 0.173901*rcval**10*r**4 + 0.026375*rcval**8*r**6
-           + 0.00240012*rcval**6*r**8 + 0.000131047*rcval**4*r**10
-           + 3.97508e-6*rcval**2*r**12 + rcval**14 + 5.16761e-8*r**14
-           )*np.arctan(0.301662*r/rcval)
-        - 0.301662*rcval**13*r + 1.71305e-7*rcval*r**13
-    )
 
-    # TODO: check with a numerical integral of rho for typos
-    # DONE
+    r, is_scalar = tl.treat_as_arr(r)
+    res = []
+    for ri in r:
+        if np.isinf(ri):
+            res.append(M)
+        else:
 
-    # note that the rc**3 in M_shape cancels with the 1/rc**3 in the M_norm
-    # M_norm is actually rho0 * rc^3 instead of rho0, to make the unit consistent
-    M_norm = M / 11.5865
-    return M_norm * M_shape
+            M_shape = 7.37618/(rcval**2 + 0.091*ri**2)**7 * (
+                0.384872*rcval**11*ri**3 + 0.0665595*rcval**9*ri**5 + 0.00665084*rcval**7*ri**7
+                + 0.000390285*rcval**5*ri**9 + 0.0000125498*rcval**3*ri**11
+                + (0.637*rcval**12*ri**2 + 0.173901*rcval**10*ri**4 + 0.026375*rcval**8*ri**6
+                   + 0.00240012*rcval**6*ri**8 + 0.000131047*rcval**4*ri**10
+                   + 3.97508e-6*rcval**2*ri**12 + rcval**14 + 5.16761e-8*ri**14
+                   )*np.arctan(0.301662*ri/rcval)
+                - 0.301662*rcval**13*ri + 1.71305e-7*rcval*ri**13
+            )
+
+            # TODO: check with a numerical integral of rho for typos
+            # DONE
+
+            # note that the rc**3 in M_shape cancels with the 1/rc**3 in the M_norm
+            # M_norm is actually rho0 * rc^3 instead of rho0, to make the unit consistent
+            M_norm = M / 11.5865
+            res.append(M_norm * M_shape)
+
+    res = np.array(res)
+    if is_scalar:
+        res = np.squeeze(res)
+    return res
 
 
 ###############
@@ -251,7 +265,7 @@ def reconstruct_density_total(gal, flg_give_R=False, interpol_method="linear", i
     :param flg_give_R: whether to output R
     :param interpol_method: how to interpolate the neighboring points
     :param interpol_precision: number of data points for the interpolation
-    :param flg_errorbar: provide an error bar for rho. Note that this is a rough estimate by translating sigma(Vobs) to sigma(rho). 
+    :param flg_errorbar: provide an error bar for rho. Note that this is a rough estimate by translating sigma(Vobs) to sigma(rho).
     :param Vth: supply velocity directly from model. Vth will be used for the reconstruction instead of gal.Vobs
 
     """
@@ -348,10 +362,9 @@ def reconstruct_mass_DM(gal, DM_profile='NFW'):
     return (mass, rs, c)
 
 
-def comparing_components(gal, m, M, c, Rs, DM_profile):
-    """Compare soliton profile with the secondary DM profile. Output two mask series with length of gal.R. One is for soliton, the other is for the secondary mass component.
+def comparing_components(m, M, c, Rs, DM_profile):
+    """Compare soliton profile with the secondary DM profile.
 
-    :param gal: galaxy instance
     :param m: scalar mass [eV]
     :param M: soliton mass [Msun]
     :param c: concentration of NFW or delc of Burkert
@@ -359,64 +372,155 @@ def comparing_components(gal, m, M, c, Rs, DM_profile):
     :param DM_profile: the DM profile, "NFW" or "Burkert"
 
     """
-    flg_sol_absent = False
-    flg2_absent = False
-    if (m is None) or (M is None):
-        mask_soliton = [False] * len(gal.R)
-        flg_sol_absent = True
-    if (c is None) or (Rs is None):
-        mask2 = [False] * len(gal.R)
-        flg2_absent = True
 
-    if flg_sol_absent and flg2_absent:
-        # simple test
-        raise Exception(
-            'Something wrong in the input. You have neither\
- a soliton component nor a secondary component.')
-    elif flg_sol_absent and (not flg2_absent):
-        # NFW/Burkert only
-        mask2 = np.logical_not(mask_soliton)
-        truncated_mass = 0.
-    elif flg2_absent and (not flg_sol_absent):
-        # soliton only
-        mask_soliton = np.logical_not(mask2)
-        truncated_mass = 0.
+    # auto check first
+    tl.check_input(m, M, Rs, c, DM_profile)
+    # choose a large enough range
+    r_arr = np.logspace(-7, 5, 70)
+    # get NFW
+    if DM_profile == "NFW":
+        rho2_arr = rho_NFW(r_arr, Rs, c)
+
+        def f(r):
+            # run time wrapper
+            return rho_sol(r, m, M) - rho_NFW(r, Rs, c)
+    # get Bkt
+    if DM_profile == "Burkert":
+        rho2_arr = rho_Burkert(r_arr, Rs=Rs, delc=c)
+
+        def f(r):
+            # run time wrapper
+            return rho_sol(r, m, M) - rho_Burkert(r, Rs=Rs, delc=c)
+
+    # get soliton
+    rho_sol_arr = rho_sol(r_arr, m, M)
+
+    # check if there's anywhere soliton dominates
+    mask = rho_sol_arr > rho2_arr
+    if sum(mask) == len(mask):
+        # soliton dominates everywhere
+        r_intersect = np.inf
+        M2_enclosed = 0.
+    elif sum(mask) > 1:  # logical_or
+        # find the last point soliton wins
+        idx = np.arange(len(r_arr))[mask][-1]
+        if idx == len(r_arr)-1:
+            # at the last data point soliton still wins
+            # then we treat it as soliton dominates everywhere
+            r_intersect = np.inf
+            M2_enclosed = 0.
+        else:
+            r0 = r_arr[idx]
+            # this shouldn't break otherwise the range is not large enough
+            r1 = r_arr[idx+1]
+            # find the intersection point using bracket
+            r_intersect = bisect(f, r0, r1)
+
+        # debugging
+        # return (r0, r1, f, r_arr, res)
+        # print('positive radii idx: %s' % (np.arange(len(r_arr))[mask]))
+        # print('positive radii: %s' % r_arr[(np.arange(len(r_arr))[mask])])
+        # print('values: %s' % f(r_arr[(np.arange(len(r_arr))[mask])]))
+        # print("idx=%s, r0=%s, f(r0)=%s" % (idx, r0, f(r0)))
+        # print("idx=%s, r1=%s, f(r1)=%s" % (idx+1, r1, f(r1)))
+        # end of debugging
+
+            # compute the secondary mass enclosed inside r_intersect
+            if DM_profile == "NFW":
+                M2_enclosed = M_NFW(r_intersect, Rs, c)
+
+            elif DM_profile == "Burkert":
+                M2_enclosed = M_Burkert(r_intersect, Rs=Rs, delc=c)
+
+        # note that we don't consider soliton outside/ 2nd component insdie
     else:
+        # soliton is subdominant all the way
+        r_intersect = 0.
+        M2_enclosed = 0.
+    return (r_intersect, M2_enclosed)
 
-        rho_sol_arr = rho_sol(gal.R, m=m, M=M)  # [Msun/kpc**3]
-        mask2 = np.array([True] * len(gal.R))
+# def comparing_components(gal, m, M, c, Rs, DM_profile):
+#     """Compare soliton profile with the secondary DM profile. Output two mask series with length of gal.R. One is for soliton, the other is for the secondary mass component.
 
-        if (DM_profile == "NFW"):
-            rho2_arr = rho_NFW(gal.R, Rs=Rs, c=c)  # [Msun/kpc**3] unit fixed
-        elif (DM_profile == "Burkert"):
-            # [Msun/kpc**3] unit fixed
-            rho2_arr = rho_Burkert(gal.R, Rs=Rs, delc=c)
+#     :param gal: galaxy instance
+#     :param m: scalar mass [eV]
+#     :param M: soliton mass [Msun]
+#     :param c: concentration of NFW or delc of Burkert
+#     :param Rs: Rs of NFW or core size of Burkert
+#     :param DM_profile: the DM profile, "NFW" or "Burkert"
 
-        flg_truncating = False
-        truncated_mass = 0.
-        for i in range(1, len(gal.R)+1):
-            if rho2_arr[-i] < rho_sol_arr[-i]:
-                # One-way switch. Once it's on it's never off
-                flg_truncating = True
+#     """
 
-            # real truncating
-            if flg_truncating is True:
-                # rho_NFW_arr[-i] = 0.
-                mask2[-i] = False
-                # record the truncated mass
-                if (DM_profile == "NFW"):
-                    truncated_mass = max(
-                        truncated_mass, M_NFW(gal.R[-i], Rs, c))
-                elif (DM_profile == "Burkert"):
-                    truncated_mass = max(
-                        truncated_mass, M_Burkert(gal.R[-i], Rs=Rs, delc=c))
-        # Now let us get the mask array for solitons
-        mask_soliton = np.logical_not(mask2)
+#     # auto check first
+#     tl.check_input(m, M, Rs, c, DM_profile)
 
-    return (mask_soliton, mask2, truncated_mass)
+#     flg_sol_absent = False
+#     flg2_absent = False
+#     if (m is None) or (M is None):
+#         mask_soliton = [False] * len(gal.R)
+#         flg_sol_absent = True
+#     if (c is None) or (Rs is None):
+#         mask2 = [False] * len(gal.R)
+#         flg2_absent = True
+
+#     if flg_sol_absent and flg2_absent:
+#         # manual simple test
+#         raise Exception(
+#             'Something wrong in the input. You have neither\
+#  a soliton component nor a secondary component.')
+#     elif flg_sol_absent and (not flg2_absent):
+#         # NFW/Burkert only
+#         mask2 = np.logical_not(mask_soliton)
+#         truncated_mass = 0.
+#     elif flg2_absent and (not flg_sol_absent):
+#         # soliton only
+#         mask_soliton = np.logical_not(mask2)
+#         truncated_mass = 0.
+#     else:
+#         rho_sol_arr = rho_sol(gal.R, m=m, M=M)  # [Msun/kpc**3]
+#         mask2 = np.array([True] * len(gal.R))
+
+#         if (DM_profile == "NFW"):
+#             rho2_arr = rho_NFW(gal.R, Rs=Rs, c=c)  # [Msun/kpc**3] unit fixed
+#         elif (DM_profile == "Burkert"):
+#             # [Msun/kpc**3] unit fixed
+#             rho2_arr = rho_Burkert(gal.R, Rs=Rs, delc=c)
+
+#         flg_truncating = False
+#         truncated_mass = 0.
+#         for i in range(1, len(gal.R)+1):
+#             if rho2_arr[-i] < rho_sol_arr[-i]:
+#                 # One-way switch. Once it's on it's never off
+#                 flg_truncating = True
+
+#             # real truncating
+#             if flg_truncating is True:
+#                 # rho_NFW_arr[-i] = 0.
+#                 mask2[-i] = False
+#                 # record the truncated mass
+#                 if (DM_profile == "NFW"):
+#                     truncated_mass = max(
+#                         truncated_mass, M_NFW(gal.R[-i], Rs, c))
+#                 elif (DM_profile == "Burkert"):
+#                     truncated_mass = max(
+#                         truncated_mass, M_Burkert(gal.R[-i], Rs=Rs, delc=c))
+#         # Now let us get the mask array for solitons
+#         mask_soliton = np.logical_not(mask2)
+
+#     return (mask_soliton, mask2, truncated_mass)
 
 
-def v2_rot(gal, c, Rs, ups_bulg, ups_disk, DM_profile, m=None, M=None, flg_debug=False, flg_baryon=True):
+def v2_rot(gal,
+           c,
+           Rs,
+           ups_bulg,
+           ups_disk,
+           DM_profile,
+           m=None,
+           M=None,
+           flg_debug=False,
+           flg_baryon=True,
+           combine_mode='matching'):
     """Constructs the rotation curve [km**2/s**2]. It can produce sol alone, NFW alone, Burkert alone, sol+NFW, and sol+Burkert.
 
     :param gal: galaxy instance
@@ -429,75 +533,130 @@ def v2_rot(gal, c, Rs, ups_bulg, ups_disk, DM_profile, m=None, M=None, flg_debug
     :param M: soliton mass [Msun]. Soliton component will be neglected if set to None.
     :param flg_debug: whether to output the mask for truncating NFW at small radius
     :param flg_baryon: whether to include baryon component in constructing the rotation curve (default: True)
+    :param combine_mode: whether to add up the two components ('adding') or to matching the two components ('matching') at the radius where their denstiies equal
 
     """
-    Vth2_arr = []
-    # mask = None
-    # truncated_mass = 0.
-    # # mask for including NFW. Zero means truncate it
-    # mask = [0.] * len(gal.R)
-    # TODO: check if gal.R is already sorted
+    tl.check_input(m, M, Rs, c, DM_profile)
 
-    # # NFW case, determine if soliton is bigger than NFW anywhere
-    # # if yes, cut out the NFW at small r to prevent NFW beating soliton again
-    # if (DM_profile == "NFW") and (m is not None) and (M is not None):
-    #     mask = [1.] * len(gal.R)
-    #     rho_NFW_arr = rho_NFW(gal.R, Rs=Rs, c=c)  # [Msun/kpc**3] unit fixed
-    #     rho_sol_arr = rho_sol(gal.R, m=m, M=M)  # [Msun/kpc**3]
-    #     flg_truncating = False
-    #     truncated_mass = 0.
-    #     for i in range(1, len(gal.R)+1):
-    #         if rho_NFW_arr[-i] < rho_sol_arr[-i]:
-    #             # One-way switch. Once it's on it's never off
-    #             flg_truncating = True
+    # weak initialize to catch logical bugs
+    flg_2nd = None
+    flg_soliton = None
 
-    #         if flg_truncating is True:
-    #             # rho_NFW_arr[-i] = 0.
-    #             mask[-i] = 0.
-    #             # record the truncated mass
-    #             truncated_mass = max(
-    #                 truncated_mass, M_NFW(gal.R[-i], Rs, c))
+    r_arr = gal.R
 
-    # TODO: make sure that the two this doesn't break when soliton is absent
-    mask_soliton, mask2, truncated_mass = comparing_components(
-        gal, m, M, c, Rs, DM_profile)
-    # print("mask: %s" % mask)
-    for i, r in enumerate(gal.R):
-        # treat the i-th bin of the rot curve
-        #
-        # TODO: move this part out to a dedicated function
-        # V thory due to DM
-        M_enclosed = 0.
-        if (m is not None) and (M is not None):
-            M_enclosed += M_sol(r, m, M) * mask_soliton[i]
-        if DM_profile == "NFW":
-            M_enclosed += (M_NFW(r, Rs, c) - truncated_mass) * mask2[i]
-        elif DM_profile == "Burkert":
-            M_enclosed += (M_Burkert(r, delc=c, Rs=Rs) -
-                           truncated_mass) * mask2[i]
-        else:
-            raise Exception(
-                "Only NFW and Burkert are implemented at the moment.")
-        VDM2 = _G_Msun_over_kpc * _c**2 * (M_enclosed/1.) * (1./r)
-        # combine DM with the baryon mass model (from SB data)
-        Vb2 = (ups_bulg*np.abs(gal.Vbul[i])*gal.Vbul[i]
-               + ups_disk*np.abs(gal.Vdisk[i])*gal.Vdisk[i]
-               + np.abs(gal.Vgas[i])*gal.Vgas[i]
-               )
-        if flg_baryon:
-            Vth2 = VDM2 + Vb2
-        else:
-            Vth2 = VDM2
-        Vth2_arr.append(Vth2)
-    Vth2_arr = np.array(Vth2_arr)
-    if not flg_debug:
-        return Vth2_arr
+    #
+    # prepare the mass profile of each component
+    #
+    if DM_profile == "NFW":
+        M2_raw = M_NFW(r_arr, Rs, c)
+        flg_2nd = True
+    elif DM_profile == "Burkert":
+        M2_raw = M_Burkert(r_arr, Rs=Rs, delc=c)
+        flg_2nd = True
     else:
-        return (Vth2_arr, mask_soliton, mask2, truncated_mass)
+        # no secondary component
+        M2_raw = np.array([0.]*len(gal.R))
+        flg_2nd = False
+
+    # if soliton is missing
+    if (m is None) or (M is None):
+        M_sol_raw = np.array([0.] * len(gal.R))
+        flg_soliton = False
+    else:
+        # the soliton input is complete
+        M_sol_raw = M_sol(r_arr, m, M)
+        flg_soliton = True
+
+    #
+    # combine them
+    #
+    if combine_mode == 'adding':
+        # no need to distinguish single/two components here
+        M_sol_arr = M_sol_raw
+        M2_arr = M2_raw
+
+    elif combine_mode == 'matching':
+        if flg_2nd and flg_soliton:
+            r_intersect, M2_enclosed = comparing_components(
+                m, M, c, Rs, DM_profile=DM_profile)
+            mask = r_arr <= r_intersect
+            # truncate outskirt
+            M_sol_arr = np.where(mask, M_sol_raw, M_sol(r_intersect, m, M))
+            # truncate inward
+            M2_arr = np.where(mask, 0, M2_raw-M2_enclosed)
+        else:
+            # matching a zero component is really just the same as adding
+            M_sol_arr = M_sol_raw
+            M2_arr = M2_raw
+    else:
+        raise Exception(
+            "Only 'adding' and 'matching' are implemented. You asked for %s " % mode)
+
+    VDM2_arr = _G_Msun_over_kpc * _c**2 * (M_sol_arr+M2_arr) * (1./r_arr)
+
+    if flg_baryon:
+        # combine DM with the baryon mass model (from SB data)
+        Vb2_arr = (ups_bulg*np.abs(gal.Vbul)*gal.Vbul
+                   + ups_disk*np.abs(gal.Vdisk)*gal.Vdisk
+                   + np.abs(gal.Vgas)*gal.Vgas)
+
+        Vth2_arr = VDM2_arr + Vb2_arr
+    else:
+        Vth2_arr = VDM2_arr
+
+    return Vth2_arr
+
+    # #
+    # # old stuff
+    # #
+    # #
+
+    # # TODO: make sure that this doesn't break when soliton is absent
+    # mask_soliton, mask2, truncated_mass = comparing_components(
+    #     gal, m, M, c, Rs, DM_profile)
+    # # print(mask_soliton)
+    # # print(mask2)
+    # # print("mask: %s" % mask)
+    # for i, r in enumerate(gal.R):
+    #     # treat the i-th bin of the rot curve
+    #     #
+    #     # TODO: move this part out to a dedicated function
+    #     # V thory due to DM
+    #     M_enclosed = 0.
+    #     if (m is not None) and (M is not None):
+    #         #  M_enclosed += M_sol(r, m, M) * mask_soliton[i]
+    #         M_enclosed += M_sol(r, m, M)
+    #         # TODO: find a more elegant way to cut out the soliton core when it's subdominant. The change should be minor.
+    #     if DM_profile == "NFW":
+    #         M_enclosed += (M_NFW(r, Rs, c) - truncated_mass) * mask2[i]
+    #     elif DM_profile == "Burkert":
+    #         M_enclosed += (M_Burkert(r, delc=c, Rs=Rs) -
+    #                        truncated_mass) * mask2[i]
+    #     elif DM_profile == "Soliton":
+    #         pass
+    #     else:
+    #         raise Exception(
+    #             "Only Soliton only, Soliton+NFW and Soliton+Burkert are implemented at the moment.")
+    #     VDM2 = _G_Msun_over_kpc * _c**2 * (M_enclosed/1.) * (1./r)
+    #     # combine DM with the baryon mass model (from SB data)
+    #     Vb2 = (ups_bulg*np.abs(gal.Vbul[i])*gal.Vbul[i]
+    #            + ups_disk*np.abs(gal.Vdisk[i])*gal.Vdisk[i]
+    #            + np.abs(gal.Vgas[i])*gal.Vgas[i]
+    #            )
+    #     if flg_baryon:
+    #         Vth2 = VDM2 + Vb2
+    #     else:
+    #         Vth2 = VDM2
+    #     Vth2_arr.append(Vth2)
+    # Vth2_arr = np.array(Vth2_arr)
+    # if not flg_debug:
+    #     return Vth2_arr
+    # else:
+    #     return (Vth2_arr, mask_soliton, mask2, truncated_mass)
 
 
 def sigma_over_vcirc(x):
-    """ empirical formula derived from Jeans equation assuming NFW. It is not intended to be called directly. 
+    """ empirical formula derived from Jeans equation assuming NFW. It is not intended to be called directly.
 
     :param x: r/rs
 

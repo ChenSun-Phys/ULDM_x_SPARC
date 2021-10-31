@@ -20,6 +20,9 @@ SPARC_aux = SPARC_Lelli2016c.txt
 # DM_profile = NFW
 DM_profile = Burkert
 # DM_profile = Soliton
+combine_mode = matching
+# combine_mode = adding
+
 
 ###################
 #    parameters   #
@@ -28,7 +31,7 @@ DM_profile = Burkert
 # param = [init, low, up, sigma]
 #
 logm = _TBD_
-logM     =   [  9,   4.5,   14,   0.1]
+logM     =   [  9,   4.5,   13,   0.1]
 logc	 =   [  0,    -1,   7 ,	  0.1]
 Rs	 =   [  5,     1,   60,	  1.0]
 ups_bulg =   [0.7,    0.,   5.,   0.1]

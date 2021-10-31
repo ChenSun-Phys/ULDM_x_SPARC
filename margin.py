@@ -201,8 +201,8 @@ def m_slicing_single_gal(gal, n_sig, dim_of_param, verbose=1., num_of_bins=30, f
             # just get the last zero, could be problematic
             index_of_chi2min = index_of_chi2min[-1]
             if verbose > 1:
-                print("-margin.py: There are %d minima in the global chi-square!!!!" %
-                      len(index_of_chi2min))
+                print("-margin.py: The minima in the global chi-square happen at index %s" %
+                      index_of_chi2min)
 
         M_upper = np.interp(
             np.log10(n_sig**2+0.01), np.log10(lst_chi2[index_of_chi2min:]+0.01), lst_M[index_of_chi2min:], left=np.nan, right=np.nan)

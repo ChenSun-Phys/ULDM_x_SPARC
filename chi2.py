@@ -88,7 +88,7 @@ def fit_rot_curve(gal, DM_profile='NFW', gridsize=50):
     return (rs_mesh, c_mesh, chi2_flat)
 
 
-def chi2_single_gal(m, M, c, Rs, ups_disk, ups_bulg, gal, flg_Vtot=False, DM_profile="NFW", flg_overshoot=False):
+def chi2_single_gal(m, M, c, Rs, ups_disk, ups_bulg, gal, flg_Vtot=False, DM_profile="NFW", flg_overshoot=False, combine_mode=None):
     """chi2 for a fixed theory point (m, M, c, Rs; ups_disk, ups_bulg). Runs over a single galaxy, gal
 up
     :param m: scalar mass [eV]
@@ -108,7 +108,8 @@ up
     if flg_Vtot:
         Vtot = np.array([])
     Vth2_arr = model.v2_rot(gal, c, Rs, ups_bulg,
-                            ups_disk, DM_profile, m=m, M=M)
+                            ups_disk, DM_profile,
+                            m=m, M=M, combine_mode=combine_mode)
     for i, r in enumerate(gal.R):
         # treat the i-th bin of the rot curve
         #
@@ -244,6 +245,16 @@ def chi2_gals(x, keys, keys_fixed, data, params, verbose=0):
 
         # from now on only read param_for_gal param card
         m = 10**param_for_gal['logm']
+
+        # combining of DM components
+        # catch the combine mode
+        # try:
+        #     combine_mode = params['combine_mode']
+        # except KeyError:
+        #     combine_mode = 'matching'
+        combine_mode = params['combine_mode']
+
+        # DM profile
         try:
             DM_profile = params['DM_profile']
         except KeyError:
@@ -316,7 +327,8 @@ def chi2_gals(x, keys, keys_fixed, data, params, verbose=0):
                                      ups_disk=ups_disk,
                                      ups_bulg=ups_bulg,
                                      gal=gal,
-                                     DM_profile=DM_profile)
+                                     DM_profile=DM_profile,
+                                     combine_mode=combine_mode)
 
         elif DM_profile == "Soliton":
             chi2_i = chi2_single_gal_overshooting(m=m,

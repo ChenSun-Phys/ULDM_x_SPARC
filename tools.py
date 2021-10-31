@@ -76,3 +76,17 @@ def scientific(val, output='string'):
     elif output == 'number':
         res = (factor, exponent)
     return res
+
+
+def check_input(m, M, Rs, c, DM_profile):
+    """simple check of input parameters
+
+    """
+    if (DM_profile == "Soliton"):
+        flg = (m is None) or (M is None)
+        if flg:
+            raise Exception("Soliton input is incomplete.")
+    if (DM_profile == "NFW") or (DM_profile == "Burkert"):
+        flg = (Rs is None) or (c is None)
+        if flg:
+            raise Exception("Secondary DM component input is incomplete.")
