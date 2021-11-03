@@ -666,8 +666,8 @@ def sigma_over_vcirc(x):
     return factor
 
 
-def sigma_disp_over_vcirc(gal, R):
-    """The velocity dispersion computed at r=x*Rs. [km/s]
+def sigma_disp_over_vcirc(gal, R=None):
+    """The velocity dispersion over circular velocity computed at R=x*Rs [km/s]. Isotropic NFW is assumed. 
 
     :param R: radius [kpc]
     :param gal: galaxy object
@@ -677,61 +677,65 @@ def sigma_disp_over_vcirc(gal, R):
     (rho, rs, c) = reconstruct_density_DM(gal, DM_profile='NFW')
 
     # make array of r, preferably with gal.R
-    x_arr = np.array(gal.R / rs)
-    ratio_arr = sigma_over_vcirc(x_arr)
-
-    R, is_scalar = tl.treat_as_arr(R)
-    fn = tl.interp_fn(np.stack((gal.R, ratio_arr), axis=-1))
-    res = fn(R)
-    if is_scalar:
-        res = np.squeeze(res)
-    return res
-
-
-def sigma_disp(gal,
-               R=None,
-               get_ratio=False,
-               get_array=False,
-               debug=False):
-    """The velocity dispersion computed at r=x*Rs. [km/s]
-
-    :param R: radius [kpc]
-    :param gal: galaxy object
-
-    """
-    # # empirical formula derived from Jeans equation
-    # # assuming NFW
-    # def sigma_over_vcirc(x):
-    #     factor = 0.55 + 0.6 * np.exp(-2*x)**4 + 0.2 * \
-    #         np.exp(-1*x)**2 + 0.2*np.exp(-0.5*x)
-    #     return factor
-
-    # get Rs
-    (rho, rs, c) = reconstruct_density_DM(gal, DM_profile='NFW')
-
-    # make array of r, preferably with gal.R
-    x_arr = np.array(gal.R / rs)
-
-    # FIXME: compute the velocity
-    ratio_arr = sigma_over_vcirc(x_arr)
-    sigma_arr = np.array(gal.Vobs * ratio_arr)
-
-    if get_array:
-        res = (gal.R, sigma_arr, ratio_arr)
+    if R is None:
+        x_arr = np.array(gal.R / rs)
+        ratio_arr = sigma_over_vcirc(x_arr)
     else:
         R, is_scalar = tl.treat_as_arr(R)
-        # print("x_arr: %s" % x_arr)
-        # print("sigma_arr: %s\n" % sigma_arr)
-
-        fn = tl.interp_fn(np.stack((gal.R, sigma_arr), axis=-1), debug=False)
-        # for interpolation debugging
-        if debug:
-            res = np.interp(R, gal.R, sigma_arr)
-        else:
-            res = fn(R)
+        x_arr = np.array(R / rs)
+        ratio_arr = sigma_over_vcirc(x_arr)
         if is_scalar:
-            res = np.squeeze(res)
-    return res
+            ratio_arr = np.squeeze(ratio_arr)
+    return ratio_arr
+
+
+# def sigma_disp(gal,
+#                r=None,
+#                get_ratio=False,
+#                get_array=False,
+#                debug=False):
+#     """The velocity dispersion computed at r=x*Rs. [km/s]
+
+#     :param r: radius [kpc]
+#     :param gal: galaxy object
+
+#     """
+#     # # empirical formula derived from Jeans equation
+#     # # assuming NFW
+#     # def sigma_over_vcirc(x):
+#     #     factor = 0.55 + 0.6 * np.exp(-2*x)**4 + 0.2 * \
+#     #         np.exp(-1*x)**2 + 0.2*np.exp(-0.5*x)
+#     #     return factor
+
+#     # get Rs
+#     (rho, rs, c) = reconstruct_density_DM(gal, DM_profile='NFW')
+
+#     # make array of r, preferably with gal.R
+#     if (r is None) or get_array:
+#         x_arr = np.array(gal.R / rs)
+#     else:
+#         x_arr = np.array(r)
+
+#     # compute the velocity
+#     ratio_arr = sigma_over_vcirc(x_arr)
+#     sigma_arr = np.array(gal.Vobs * ratio_arr)
+
+#     if get_array:
+#         res = (gal.R, sigma_arr, ratio_arr)
+#     else:
+#         r, is_scalar = tl.treat_as_arr(r)
+#         # print("x_arr: %s" % x_arr)
+#         # print("sigma_arr: %s\n" % sigma_arr)
+
+#         fn = tl.interp_fn(np.stack((gal.R, sigma_arr), axis=-1), debug=False)
+#         # for interpolation debugging
+#         if debug:
+#             res = np.interp(r, gal.R, sigma_arr)
+#         else:
+#             res = fn(r)
+#         if is_scalar:
+#             res = np.squeeze(res)
+#     return res
 
 
 #######################
@@ -791,16 +795,39 @@ def rc_SH(m, gal):
 # relaxation time scales
 ########################
 
-def tau(f, m, sigma=57., rho=0.003):
+def tau(f, m, sigma=57., rho=0.003, R=None, cut_log=True):
     """ relaxation time computation [Gyr]
+
     :param f: fraction
     :param m: scalar mass [eV]
     :param sigma: dispersion [km/s]
     :param rho: DM density [Msun/pc**3]
+    :param r: radius relevant for the coulomb log [kpc]
 
     """
-    # fixed: 0.6 -> 2.
-    return 2. * 1./f**2 * (m/(1.e-22))**3 * (sigma/100)**6 * (rho/0.1)**(-2)
+    # if R is array, rho and sigma should also be arrays
+    R, is_scalar = tl.treat_as_arr(R)
+
+    # compute the relaxation time
+    res = 2. * 1./f**2 * (m/(1.e-22))**3 * (sigma/100)**6 * (rho/0.1)**(-2)
+
+    # compute the coulomb log
+    log = np.log(m * R * sigma * _kpc_eV_ / _c)
+    # print(m * R * sigma * _kpc_eV_ / _c)
+
+    if cut_log:
+        # cut out the log below 1
+        # by deeming the relaxation time to be huge
+        # so rrelax will drop to almost zero
+        log[np.where(log < 1)] = 1e-100
+
+    # final result
+    res = res / log
+
+    if is_scalar:
+        res = np.squeeze(res)
+
+    return res
 
 
 def relaxation_at_rc(m, gal, f, verbose=0, multiplier=1.):
@@ -834,7 +861,7 @@ def relaxation_at_rc(m, gal, f, verbose=0, multiplier=1.):
     return relax_time
 
 
-def relax_radius(f, m, gal, method='fit', interpol_method='linear'):
+def relax_radius(f, m, gal, method='fit', interpol_method='linear', cut_log=True):
     """Computes the radius within which the relaxation time is smaller
 
     :param f: fraction of total ULDM
@@ -857,7 +884,8 @@ def relax_radius(f, m, gal, method='fit', interpol_method='linear'):
         v_arr = v_mid_arr     # only use the mid points
 
     elif method == 'fit':
-        r_arr = np.logspace(np.log10(gal.R[0]), np.log10(gal.R[-1]), 200)
+        # r_arr = np.logspace(np.log10(gal.R[0]), np.log10(gal.R[-1]), 200)
+        r_arr = np.logspace(-4, 2, 400)
         rho_fn, _, _ = reconstruct_density_DM(gal)
         rho_arr = rho_fn(r_arr)
         mass_fn, _, _ = reconstruct_mass_DM(gal)
@@ -870,13 +898,13 @@ def relax_radius(f, m, gal, method='fit', interpol_method='linear'):
     sigma_arr = sigma_disp_over_vcirc(gal, r_arr) * v_arr
     # tau_arr = tau(f, m, v_arr, rho_arr)
     # now use dispersion velocity instead of the circ vel
-    tau_arr = tau(f, m, sigma_arr, rho_arr)
+    tau_arr = tau(f, m, sigma_arr, rho_arr, r_arr, cut_log)
 
-    # check coulomb log:
-    _, mask2 = coulomb_log(gal, m)
-    if mask2 is False:
-        # make sure relaxation breaks down
-        tau_arr = tau_arr * np.inf
+    # # check coulomb log:
+    # _, mask2 = coulomb_log(gal, m)
+    # if mask2 is False:
+    #     # make sure relaxation breaks down
+    #     tau_arr = tau_arr * np.inf
 
     # mask = np.array(np.where(tau_arr - _tau_U_ < 0.)).reshape(-1)
     mask = np.where(tau_arr - _tau_U_ < 0., True, False)
@@ -909,7 +937,8 @@ then multiply by the fraction of the correct species. ")
         M_arr = reconstruct_mass_total(gal)
     elif method == 'fit':
         mass_fn, _, _ = reconstruct_mass_DM(gal)
-        r_arr = np.logspace(np.log10(gal.R[0]), np.log10(gal.R[-1]), 200)
+        # r_arr = np.logspace(np.log10(gal.R[0]), np.log10(gal.R[-1]), 200)
+        r_arr = np.logspace(-4, 2, 400)
         M_arr = mass_fn(r_arr)
     else:
         raise Exception("method must be either 'num' or 'fit'.")
@@ -1055,20 +1084,37 @@ def tau_BH(m, gal, MBH, debug_factor=1.):
     return res
 
 
-def coulomb_log(gal, m):
-    """check if the coulomb_log breaks down the relaxation estimate
+# def coulomb_log(gal, m):
+#     """check if the coulomb_log breaks down the relaxation estimate
 
-    :param gal: galaxy instance
-    :param m: scalar mass
+#     :param gal: galaxy instance
+#     :param m: scalar mass
 
-    """
+#     """
 
-    m, is_scalar = tl.treat_as_arr(m)
-    R = gal.R[-1]
-    sigma = sigma_disp(gal, R) / _c
-    res = m * R * _kpc_eV_ * sigma
-    flag = np.where(res > _coulomb_log_threadhold_, True, False)
-    if is_scalar:
-        res = np.squeeze(res)
-        flag = np.squeeze(flag)
-    return res, flag
+#     m, is_scalar = tl.treat_as_arr(m)
+#     R = gal.R[-1]
+#     sigma = sigma_disp(gal, R) / _c
+#     res = m * R * _kpc_eV_ * sigma
+#     flag = np.where(res > _coulomb_log_threadhold_, True, False)
+#     if is_scalar:
+#         res = np.squeeze(res)
+#         flag = np.squeeze(flag)
+#     return res, flag
+
+# def coulomb_log(gal, m, r):
+#     """check if the coulomb_log breaks down the relaxation estimate
+
+#     :param gal: galaxy instance
+#     :param m: scalar mass [eV]
+#     :param r: the radius at which coulomb log is comptued [kpc]
+
+#     """
+#     r, is_scalar = tl.treat_as_arr(r)
+#     for ri in r:
+#         sigma = sigma_disp(gal, ri) / _c  # FIXME
+#         res = m * R * _kpc_eV_ * sigma
+#     if is_scalar:
+#         res = np.squeeze(res)
+#         flag = np.squeeze(flag)
+#     return res, flag
