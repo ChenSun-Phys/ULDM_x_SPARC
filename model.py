@@ -834,7 +834,7 @@ def relaxation_at_rc(m, gal, f, verbose=0, multiplier=1.):
     return relax_time
 
 
-def relax_radius(f, m, gal, method='num', interpol_method='linear'):
+def relax_radius(f, m, gal, method='fit', interpol_method='linear'):
     """Computes the radius within which the relaxation time is smaller
 
     :param f: fraction of total ULDM
@@ -845,6 +845,7 @@ def relax_radius(f, m, gal, method='num', interpol_method='linear'):
 
     """
     if method == 'num':
+        print("Using DM+baryon components. This is technically not correct.")
         r_arr = gal.R
         v_arr = gal.Vobs
         r_mid_arr, rho_arr = reconstruct_density_total(
@@ -856,8 +857,6 @@ def relax_radius(f, m, gal, method='num', interpol_method='linear'):
         v_arr = v_mid_arr     # only use the mid points
 
     elif method == 'fit':
-        # TODO: need to add the baryon component
-        print("Using DM component only. This is technically not correct.")
         r_arr = np.logspace(np.log10(gal.R[0]), np.log10(gal.R[-1]), 200)
         rho_fn, _, _ = reconstruct_density_DM(gal)
         rho_arr = rho_fn(r_arr)
@@ -902,9 +901,9 @@ make the soliton predicted by SH relation.
     M_SH_val = M_SH(m, gal)
 
     if method == 'num':
-        print("You chose to use total mass to supply the growth of BEC core. This is\
-              technically incorrect. Need to subtract the baryonic component,\
-              then multiply by the fraction of the correct species. ")
+        print("You chose to use total mass to supply the growth of BEC core. This is \
+technically incorrect. Need to subtract the baryonic component, \
+then multiply by the fraction of the correct species. ")
         # TODO: find a way to subtract the baryonic components
         r_arr = gal.R
         M_arr = reconstruct_mass_total(gal)
@@ -936,7 +935,7 @@ def f_critical(m, gal, factor=1.):
     """
     f_arr = np.logspace(-3, 0., 100)
     r_relax_arr = np.array(
-        [relax_radius(f, m, gal, method='num') for f in f_arr])
+        [relax_radius(f, m, gal, method='fit') for f in f_arr])
     r_supply_arr = np.array(
         [supply_radius(f, m, gal, method='fit') for f in f_arr])
 
@@ -968,7 +967,7 @@ def f_critical_two_species(m1, m2, f2, gal):
 
     f1_arr = np.logspace(-3, np.log10(1-f2), 100)
     r_relax_arr = np.array(
-        [max(relax_radius(f1, m1, gal, method='num'), relax_radius(f2, m2, gal, method='num'))
+        [max(relax_radius(f1, m1, gal, method='fit'), relax_radius(f2, m2, gal, method='fit'))
          for f1 in f1_arr])
 
     r_supply_arr = np.array(

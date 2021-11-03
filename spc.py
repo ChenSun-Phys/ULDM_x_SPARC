@@ -1,5 +1,5 @@
-""" This module contains all functions to load the SPARC 
-data set. It is based on the Matlab code first written by Nitsan Bar. 
+""" This module contains all functions to load the SPARC
+data set. It is based on the Matlab code first written by Nitsan Bar.
 ...Module author: Chen Sun
 ...Year: 2021
 ...Email: chensun@mail.tau.ac.il
@@ -40,6 +40,12 @@ class Galaxy(object):
         # extended meta data from Lelli2016.c
         self.Vflat = 0.  # [km/s]
         self.dVflat = 0.  # [km/s]
+
+    def __call__(self):
+        return "<galaxy instance %s>" % self.name
+
+    def __str__(self):
+        return "<galaxy instance %s>" % self.name
 
     def sanity_check(self):
         # TODO: add some sanity checks
