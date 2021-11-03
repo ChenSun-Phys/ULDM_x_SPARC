@@ -323,7 +323,11 @@ def reconstruct_density_DM(gal, DM_profile='NFW'):
         rs = gal.rs
 
     def rho(r):
-        # return rho_NFW(r, Rs=rs, c=c, h=_h_ref) * _eV4_pc3_over_Msun
+        """ Run time wrapper
+
+        :param r: [kpc]
+
+        """
         # [Msun/kpc3] to [Msun/pc3]
         return rho_NFW(r, Rs=rs, c=c, h=_h_ref) / 1e9
 
@@ -813,7 +817,7 @@ def tau(f, m, sigma=57., rho=0.003, R=None, cut_log=True):
 
     # compute the coulomb log
     log = np.log(m * R * sigma * _kpc_eV_ / _c)
-    # print(m * R * sigma * _kpc_eV_ / _c)
+    #print(m * R * sigma * _kpc_eV_ / _c)
 
     if cut_log:
         # cut out the log below 1
@@ -830,19 +834,23 @@ def tau(f, m, sigma=57., rho=0.003, R=None, cut_log=True):
     return res
 
 
-def relaxation_at_rc(m, gal, f, verbose=0, multiplier=1.):
+def relaxation_at_rc(m, gal, f, verbose=0, multiplier=1., cut_log=True):
     """ relaxation time at rc*multiplier, where rc is predicted by the SH relation [Gyr]
     """
     rc_eff = rc_SH(m, gal)*multiplier  # this is rc*multiplier
     if verbose > 1:
         print('rc_SH=%s' % rc_eff)
 
-    # note this should be total density
-    r_arr, rho_arr = reconstruct_density_total(gal, flg_give_R=True)
-    rho_at_rc = np.interp(rc_eff, r_arr, rho_arr)
+    # note this should be DM density
+    rho_fn, _, _ = reconstruct_density_DM(gal)
+    rho_at_rc = rho_fn(rc_eff)
+
+    #r_arr, rho_arr = reconstruct_density_total(gal, flg_give_R=True)
+    #rho_at_rc = np.interp(rc_eff, r_arr, rho_arr)
     if verbose > 1:
         print('rho_at_rc=%s' % rho_at_rc)
 
+    # TODO: could use a finer grid
     v_at_rc = np.interp(rc_eff, gal.R, gal.Vobs)
     v_inside_rc_arr = gal.Vobs[gal.R < rc_eff]
     # make sure to use the max of v inside rc, to be conservative
@@ -855,8 +863,11 @@ def relaxation_at_rc(m, gal, f, verbose=0, multiplier=1.):
 
     # fixed: 0.6 -> 2
     # relax_time = 0.6 * 1/f**2 * (m/1e-22)**3 * (v_at_rc/100)**6 * (rho_at_rc/0.1)**(-2)
-    relax_time = 2. * 1/f**2 * (m/1e-22)**3 * \
-        (v_disp/100)**6 * (rho_at_rc/0.1)**(-2)
+    # relax_time = 2. * 1/f**2 * (m/1e-22)**3 * \
+    #     (v_disp/100)**6 * (rho_at_rc/0.1)**(-2)
+    sigma = sigma_disp_over_vcirc(gal, rc_eff) * v_at_rc
+    relax_time = tau(f, m, sigma=sigma, rho=rho_at_rc,
+                     R=rc_eff, cut_log=cut_log)
 
     return relax_time
 
