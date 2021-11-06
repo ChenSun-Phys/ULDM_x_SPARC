@@ -1022,7 +1022,7 @@ def f_critical_two_species(m1, m2, f2, gal):
         r_supply_common_arr = r_supply_arr[mask]
         solve = np.where(r_supply_common_arr < r_relax_common_arr, True, False)
         if sum(solve) > 0:
-            f_critical = f1_arr[mask][solve][0]
+            f_critical = min(f1_arr[mask][solve])
         else:
             f_critical = 1.5
     else:
