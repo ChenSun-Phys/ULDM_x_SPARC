@@ -43,7 +43,17 @@ For a scan of Model C with evenly spaced grid, see `2_demo_even_grid_scan.ipynb`
 
 This code is under [MIT](https://opensource.org/licenses/MIT) license. 
 
-## Bibtex entry
-If you use this code or find it in any way useful for your research, please cite Bar, Blum, and Sun (2021). The Bibtex entry is: *tba*
+## BibTeX entry
+If you use this code or find it in any way useful for your research, please cite Bar, Blum, and Sun (2021). The BibTeX entry is: 
+
+@article{Bar:2021kti,
+    author = "Bar, Nitsan and Blum, Kfir and Sun, Chen",
+    title = "{Galactic rotation curves vs. ultralight dark matter II}",
+    eprint = "2111.03070",
+    archivePrefix = "arXiv",
+    primaryClass = "hep-ph",
+    month = "11",
+    year = "2021"
+}
 
 
