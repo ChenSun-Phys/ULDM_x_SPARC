@@ -3,10 +3,12 @@
 This is a code to constrain the ultralight dark matter (ULDM) using the SPARC data set. The running modes contain {smart grid, even grid} x {soliton + NFW, soliton + Burkert, soliton only}. For soliton + NFW/Burkert, to speed up the marginalization of nuisance parameters, I recommend using `emcee` to propose a smart grid as it is defaulted now.
 
 ## Results
-![plot](./notebooks/plots/sol_full_SPARC_2sigma.png)
-![plot](./notebooks/plots/f_2sigma.png)
+<p align="center">
+  <img src="./notebooks/plots/sol_full_SPARC_2sigma.png" width="450" alt="soliton mass contained in each disk galaxy" title="soliton mass contained in each disk galaxy">
+  <img src="./notebooks/plots/f_2sigma.png" width="450" alt="ULDM total density fraction" title="ULDM total density fraction">
+</p>
 
-The left is the constraint on soliton mass contained in each disk galaxy, the right interpreted constraint on ULDM total density. See the publication for details.
+The left is the constraint on soliton mass contained in each disk galaxy (normalized by the amount predicted by simulations,) the right interpreted constraint on ULDM total density. See the publication for details.
 
 ## Usage
 
