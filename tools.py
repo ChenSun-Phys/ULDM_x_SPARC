@@ -1,3 +1,12 @@
+""" This module contains useful utilities. Part of it was first written by Manuel Buen-Abad and Chen Sun for the repository snr_ghosts. See https://github.com/ChenSun-Phys/snr_ghosts and the licence therein for reuse. 
+
+Module author: Chen Sun
+Year: 2020, 2021
+Email: chensun@mail.tau.ac.il
+
+"""
+
+
 import numpy as np
 from scipy.interpolate import interp1d
 
