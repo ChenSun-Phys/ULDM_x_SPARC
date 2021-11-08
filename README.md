@@ -4,11 +4,11 @@ This is a code to constrain the ultralight dark matter (ULDM) using the SPARC da
 
 ## Results
 <p align="center">
-  <img src="./notebooks/plots/sol_full_SPARC_2sigma.png" width="450" alt="soliton mass contained in each disk galaxy" title="soliton mass contained in each disk galaxy">
-  <img src="./notebooks/plots/f_2sigma.png" width="450" alt="ULDM total density fraction" title="ULDM total density fraction">
+  <img src="./notebooks/plots/sol_full_SPARC_2sigma.png" width="500" alt="soliton mass contained in each disk galaxy" title="soliton mass contained in each disk galaxy">
+  <img src="./notebooks/plots/f_2sigma.png" width="500" alt="ULDM total density fraction" title="ULDM total density fraction">
 </p>
 
-The left is the constraint on soliton mass contained in each disk galaxy (normalized by the amount predicted by simulations,) the right interpreted constraint on ULDM total density. See the publication for details.
+First plot is the constraint on soliton mass contained in each disk galaxy (normalized by the amount predicted by simulations,) second interpreted constraint on ULDM total density. See the publication for details.
 
 ## Usage
 
@@ -45,7 +45,7 @@ python run_mslicing.py -N 30000 -o ./chains/run_000_NFW -L ./data -i input/sampl
 
 will automatically run soliton+NFW model over NGC0100 and NGC2403 with 30 fixed m ranging from 1e-25 eV to 1e-19 eV. The h5 chains will be saved under ./chains/ folder. 
 
-For a scan of Model C with evenly spaced grid, see `2_demo_even_grid_scan.ipynb`. 
+For a scan of Soliton+anything with evenly spaced grid, see `2_demo_even_grid_scan.ipynb`. For discussions on gravitational dynamical relaxation time scales, see `3_demo_dynamical_relaxation_time.ipynb`.
 
 ## License
 
