@@ -1,4 +1,4 @@
-""" This module builds up the mass profile for model A, B, and C, as shown in the paper.
+""" This module builds up the mass profile for Soliton+anything as well as Soliton+NFW and Soliton+Burkert, as shown in the paper.
 ...Module author: Chen Sun
 ...Year: 2020, 2021
 ...Email: chensun@mail.tau.ac.il

@@ -1,7 +1,10 @@
-########################################
-# this is the module to define the chi2
-# and related functions
-########################################
+""" This module defines the chi-squared and related functions
+
+Module author: Chen Sun
+Year: 2020
+Email: chensun@mail.tau.ac.il
+
+"""
 import numpy as np
 import model
 
