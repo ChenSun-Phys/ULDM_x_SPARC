@@ -37,15 +37,19 @@ class Results(object):
         self.storage = arr
 
 
-def analyze(res_arr, sigma_lvl):
+def analyze(res_arr, sigma_lvl, debug=False, debug_bp=0):
+    if debug:
+        counter = 0
     for result in res_arr:
         if not result.sane:
             continue
 
         # m = result.m
-        M_arr = result.M_arr
-        chi2_arr = result.chi2_arr
-        mask = result.chi2_arr > 0.01  # only interp with these guys
+        # M_arr = result.M_arr
+        # chi2_arr = result.chi2_arr
+
+        # mask = result.chi2_arr > 0.01  # only interp with these guys
+        mask = result.chi2_arr > 1e-10  # only interp with these guys
         # chi2_to_interp_arr = np.concatenate(
         #     ([result.chi2_arr[np.logical_not(mask)][-1]], result.chi2_arr[mask]))
         chi2_to_interp_arr = np.concatenate(
@@ -68,6 +72,15 @@ def analyze(res_arr, sigma_lvl):
         # update result
         result.sigma_lvl = sigma_lvl
         result.M_contours = M_contours
+
+        # debug section
+        if debug and (counter == debug_bp):
+            print("m=%.2e, M_arr: %s" % (result.m, result.M_arr))
+            print("chi2=%s" % result.chi2_arr)
+            return result
+
+        if debug:
+            counter += 1
 
 
 class Scanner():

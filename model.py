@@ -594,7 +594,7 @@ def v2_rot(gal,
             M2_arr = M2_raw
     else:
         raise Exception(
-            "Only 'adding' and 'matching' are implemented. You asked for %s " % mode)
+            "Only 'adding' and 'matching' are implemented. You asked for %s " % combine_mode)
 
     VDM2_arr = _G_Msun_over_kpc * _c**2 * (M_sol_arr+M2_arr) * (1./r_arr)
 
