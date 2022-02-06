@@ -769,13 +769,14 @@ def M_SH(m, gal):
 
     """
     Vmax = gal.get_Vmax()
+    # Vmax = gal.Vobs[-1]
     K_over_M = (Vmax / _c)**2 / 2.
     # virial theorem Ep = -2 Ek = 2 E
     E_over_M = K_over_M
     return 4.3 * np.sqrt(np.abs(E_over_M)) * _Mpl2_over_eV_Msun/m
 
 
-def bar_ratio_at_peak(gal, M,  Ups_bulg=0.5, Ups_disk=0.5):
+def bar_ratio_at_peak(gal, M=None,  Ups_bulg=0.5, Ups_disk=0.5):
     Vobs_arr = gal.Vobs
     Vbar2_arr = Ups_bulg * np.abs(gal.Vbul) * gal.Vbul + Ups_disk * \
         np.abs(gal.Vdisk) * gal.Vdisk + np.abs(gal.Vgas) * gal.Vgas

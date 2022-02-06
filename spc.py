@@ -51,8 +51,10 @@ class Galaxy(object):
         # TODO: add some sanity checks
         return
 
+    # def get_M(self):
+    #     return max(self.Vobs * self.R / mdl._c / mdl._Msun_over_kpc_Mpl2)
     def get_M(self):
-        return max(self.Vobs * self.R / mdl._c / mdl._Msun_over_kpc_Mpl2)
+        return max(self.Vobs**2 * self.R / mdl._c**2 / mdl._Msun_over_kpc_Mpl2)
 
     # def get_Msol(self):
     #     sqrt_ctilde_Phi = 1. # 1.1 to 0.9
