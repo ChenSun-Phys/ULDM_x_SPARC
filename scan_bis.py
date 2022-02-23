@@ -30,10 +30,13 @@ class Scanner_bis():
              dir_name='results',
              tolerance=1.e-2,
              max_step=100,
-             debug=False):
+             debug=False,
+             log_m_to_include=[]):
 
         # log_M_arr = np.linspace(log_M_low, log_M_high, num_of_log_M)
-        log_m_arr = np.linspace(log_m_low, log_m_high, num_of_log_m)
+        log_m_arr_raw = np.linspace(log_m_low, log_m_high, num_of_log_m)
+        log_m_arr = np.concatenate((log_m_arr_raw, log_m_to_include))
+        log_m_arr = np.unique(log_m_arr)
 
         # ups_disk_mesh, ups_bulg_mesh = np.meshgrid(ups_disk_arr, ups_bulg_arr)
 

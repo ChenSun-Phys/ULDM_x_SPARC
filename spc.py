@@ -62,6 +62,12 @@ class Galaxy(object):
     def get_Vmax(self):
         return max(self.Vobs)
 
+    def is_rotcurve_complete(self):
+        if max(self.Vobs) == self.Vobs[-1]:
+            return False
+        else:
+            return True
+
 
 def readSPARC(path, verbose=0):
     """Function that load the SPARC dataset
